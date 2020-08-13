@@ -1,0 +1,76 @@
+1. Scannerizzare il documento
+-----------------------------
+
+$ skanlite
+
+Si ottiene una directory <prjname>/ con dentro file .png in ordine di pagina.
+
+2. Scantailor
+-------------
+
+$ scantailor
+
+2.1 Creare un nuovo progetto, specificando:
+    - input:  <prjname>
+    - output: <prjname>_tailor
+    - file:   <prjname>.scantailor
+
+2.2 Fare le modifiche
+
+2.3 Salvare
+
+Si ottengono  una directory  con dei .tif  <prjname>_tailor e  un file
+<prjname>.scantailor con la descrizione del progetto.
+
+3. Creare .djvu
+---------------
+
+$ /home/chiara/scan/djvubind/bin/djvubind <prjname>_tailor
+
+Opzioni:
+
+Options:
+  --version             show program's version number and exit
+  -h, --help            show this help message and exit
+  --cover-front=COVER_FRONT
+                        Specifies an alternate front cover image.  By default,
+                        'cover_front.jpg' is used if present.
+  --cover-back=COVER_BACK
+                        Specifies an alternate back cover image.  By default,
+                        'cover_back.jpg' is used if present.
+  --metadata=METADATA   Specifies an alternate metadata file.  By default,
+                        'metadata' is used if present.
+  --bookmarks=BOOKMARKS
+                        Specifies an alternate bookmarks file.  By default,
+                        'bookmarks' is used if present.
+  --no-ocr              Images will not be processed for text content.
+  --ocr-engine=OCR_ENGINE
+                        Select which ocr engine to use (cuneiform|tesseract).
+                        By default, 'none' is used.
+  --tesseract-options=TESSERACT_OPTIONS
+                        Additional command line options to pass to tesseract.
+  --cuneiform-options=CUNEIFORM_OPTIONS
+                        Additional command line options to pass to cuneiform.
+  --title-start=TITLE_START
+                        The image filename that is page 1.  Pages before this
+                        will titled with roman numerals.
+  --title-start-number=TITLE_START_NUMBER
+                        The number for the first page in arabic numerals.
+  --title-exclude=TITLE_EXCLUDE
+                        An image that should be excluded from page numbering.
+                        An alternate title can be provided after a colon (e.g.
+                        page_01.tif:cover).
+  --title-uppercase     Use uppercase roman numerals instead of lowercase.
+  -q, --quiet           
+  -v, --verbose         
+
+Genera un file book.djvu che va quindi rinominato:
+
+$ mv book.djvu <prjname>.djvu
+
+Formato del file di metadati:
+
+  Title "Ricettario Maizena"
+  Subject "ricette"
+  Author "Maizena"
+

@@ -1,0 +1,54 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+import os
+import argparse
+import prctl
+import signal
+import multiprocessing
+import socket
+from PySide2 import QtCore as qtcore, QtNetwork as qtnetwork
+
+prctl.set_name("djvueditor")
+prctl.set_proctitle("djvueditor "+" ".join(sys.argv[1:]))
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(BASE_DIR,"opt","djvubind") )
+sys.path.insert(0, os.path.join(BASE_DIR,"lib","python") )
+
+parser = argparse.ArgumentParser(description="Data brocker")
+parser.add_argument('--version', action='version', version='%%(prog)s %s' % "0.1")
+
+parser.add_argument("-o","--open_file",
+                    type=str,
+                    help="open file",
+                    metavar="FILE")
+
+import djvuedlib
+import djvubind.utils
+import djvuedlib.widgets
+import djvuedlib.jsonlib
+
+djvuedlib.jsonlib.json_settings()
+
+
+if __name__=='__main__':
+
+    ## djvubind check dipendenze
+    deps = ['cpaldjvu', 'cjb2', 'djvm', 'djvused', 'identify']
+    for dep in deps:
+        if (not djvubind.utils.is_executable(dep)):
+            print('err: __main__: external dependency ({0}) cannot be found.'.format(dep), file=sys.stderr)
+            sys.exit(1)
+
+
+    options=parser.parse_args()
+    kwargs={}
+    if options.open_file and os.path.exists(options.open_file):
+        kwargs["open_file"]=options.open_file
+    
+    gui=djvuedlib.DjvuEditorGui(BASE_DIR,**kwargs)
+
+    sys.exit(gui.exec_())
+
