@@ -28,7 +28,8 @@ class ActionQuit(qtwidgets.QAction):
 class ActionNew(qtwidgets.QAction):
     def __init__(self,application):
         self._app=application
-        qtwidgets.QAction.__init__(self,qtgui.QIcon(":/images/new.png"),"New",self._app.window)
+        qtwidgets.QAction.__init__(self,qtgui.QIcon(":/images/new.png"),
+                                   "New",self._app.window)
         self.setShortcuts(qtgui.QKeySequence.New)
         self.setStatusTip("New project")
         self.setMenuRole(qtwidgets.QAction.ApplicationSpecificRole)
@@ -42,11 +43,13 @@ class ActionNew(qtwidgets.QAction):
         metadata=[]
         for label in [ "title","author","date","subject" ]:
             metadata.append( [label,wizard.field(label)] )
-        scantailor_fname=wizard.field("scantailor_fname")
+        #scantailor_fname=wizard.field("scantailor_fname")
+        tiff_dir=wizard.field("tiff_dir")
         project_fname=wizard.field("project_fname")
 
-        self._app.new_project(project_fname,metadata,scantailor_fname,
-                              wizard.scantailor_page.xmltree)
+        # self._app.new_project(project_fname,metadata,scantailor_fname,
+        #                       wizard.scantailor_page.xmltree)
+        self._app.new_project(project_fname,metadata,tiff_dir)
 
 class ActionOpen(qtwidgets.QAction):
     def __init__(self,application):

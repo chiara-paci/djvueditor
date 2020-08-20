@@ -87,12 +87,6 @@ class DjvuEditorGui(qtwidgets.QApplication):
         self.actions["open_dock_configuration"]=self.dock_configuration.toggleViewAction()
         menus["View"].append("open_dock_configuration")
 
-        self.dock_scantailor=docks.DockScanTailor(self)
-        self.window.addDockWidget(qtcore.Qt.LeftDockWidgetArea, self.dock_scantailor)
-        self.actions["open_dock_scantailor"]=self.dock_scantailor.toggleViewAction()
-        menus["View"].append("open_dock_scantailor")
-
-        self.window.tabifyDockWidget(self.dock_scantailor,self.dock_metadata)
         self.window.tabifyDockWidget(self.dock_metadata,self.dock_configuration)
 
         self.setup_menu_bar(menus)
@@ -128,14 +122,13 @@ class DjvuEditorGui(qtwidgets.QApplication):
         self.refresh_project()
 
     def refresh_project(self):
-        self.dock_scantailor.set_project(self.project)
         self.dock_metadata.set_project(self.project)
         self.dock_configuration.set_project(self.project)
         self.main.set_project(self.project)
 
-    def new_project(self,project_fname,metadata,scantailor_fname,xmltree):
+    def new_project(self,project_fname,metadata,tiff_dir):
         self.project=libproject.Project(project_fname)
-        self.project.new_project(metadata,scantailor_fname,xmltree)
+        self.project.new_project(metadata,tiff_dir)
         self.window.setWindowTitle("DjvuEditor: "+project_fname)
         self.refresh_project()
 

@@ -101,26 +101,29 @@ class Project(abstracts.SerializedDict):
         self._setup_options()
         self._setup_book()
 
-    def new_project(self,metadata,scantailor_fname,xmltree):
+    def new_project(self,metadata,tiff_dir):
         self.clear()
-        def traverse(xmlelem,parent):
-            elem={
-                "name": xmlelem.tag,
-                "attributes": xmlelem.attrib,
-                "children": []
-            }
-            parent["children"].append(elem)
-            for ch in xmlelem.findall("*"):
-                traverse(ch,elem)
+        self["Tiff directory"]=tiff_dir
+        f_metadata=os.path.join(self["Tiff directory"],"metadata")
+        if os.path.exists(f_metadata):
+            new_metadata_dict=collections.OrderedDict(metadata)
+            with open(f_metadata,'r') as fd:
+                for r in fd.readlines():
+                    r=r.strip()
+                    if not r: continue
+                    t=r.strip().split()
+                    key=t[0]
+                    value=(" ".join(t[1:])).strip('"')
+                    if key in new_metadata_dict:
+                        if new_metadata_dict[key]==value: continue
+                        if not new_metadata_dict[key]:
+                            new_metadata_dict[key]=value
+                            continue
+                        while key in new_metadata_dict: key+="_"
+                    new_metadata_dict[key]=value
+            metadata=list(new_metadata_dict.items())
 
         self["Metadata"]=self.ProjectMetadata(self,metadata)
-        root=xmltree.getroot()
-        self["Tif directory"]=root.attrib["outputDirectory"]
-        self["Scantailor"]={
-            "name": scantailor_fname,
-            "children": []
-        }
-        traverse(root,self["Scantailor"])
         self._save()
         self._setup_options()
         self._setup_book()
@@ -163,16 +166,16 @@ class Project(abstracts.SerializedDict):
             self["Pages"]=self.ProjectSubDict(self,self["Pages"])
         else:
             self["Pages"]=self.ProjectSubDict(self)
-        if "Tif directory" not in self: return
+        if "Tiff directory" not in self: return
         file_list=self._file_list()
         self.book=libbook.Book()
         self.book.set_pages(file_list)
         
     def _file_list(self):
-        f_metadata=os.path.join(self["Tif directory"],"metadata")
+        f_metadata=os.path.join(self["Tiff directory"],"metadata")
         self["Metadata"].write_on(f_metadata)
 
-        f_bookmarks=os.path.join(self["Tif directory"],"bookmarks")
+        f_bookmarks=os.path.join(self["Tiff directory"],"bookmarks")
         # da aggiungere <------
 
         file_list=[
@@ -187,7 +190,7 @@ class Project(abstracts.SerializedDict):
         cback=self["Cover back"] if "Cover back" in self else ""
         cfront=self["Cover front"] if "Cover front" in self else ""
         page_list=[]
-        with os.scandir(self["Tif directory"]) as it:
+        with os.scandir(self["Tiff directory"]) as it:
             for entry in it:
                 if not entry.is_file(): continue
                 if entry.path in [cback,cfront,f_metadata,f_bookmarks]: continue
@@ -220,6 +223,7 @@ class Project(abstracts.SerializedDict):
         
     def djvubind(self,djvu_name):
         if len(self.book.pages) == 0: return
+        self["Metadata"].write_on(f_metadata)
         print('Binding %d file(s).' % len(self.book.pages))
         enc_opts=self["Encoding Options"].copy()
         enc_opts["ocr"]=(self["Ocr Options"]["ocr_engine"] != "no ocr")

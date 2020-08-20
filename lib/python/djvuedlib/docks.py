@@ -89,56 +89,6 @@ class BaseDock(qtwidgets.QDockWidget):
     def _close_action_triggered(self): 
         self.hide()
 
-class DockScanTailor(BaseDock):
-    def __init__(self,application):
-        BaseDock.__init__(self,"ScanTailor",application)
-        self.setFont(self._app.main_font(size=10))
-
-        v_layout = qtwidgets.QVBoxLayout()
-        self.tif_dir=qtwidgets.QLabel()
-        self.tif_dir.setStyleSheet("border-top:none;border-bottom:none")
-        self.tif_dir.setFont(self._app.main_font(size=10))
-
-        self.scantailor_fname=qtwidgets.QLabel()
-        self.scantailor_fname.setStyleSheet("color:black;border-top:none;border-bottom:none")
-        self.scantailor_fname.setFont(self._app.main_font(size=10))
-        self.scantailor=qtwidgets.QTreeWidget()
-        self.scantailor.setColumnCount(2)
-        self.scantailor.setHeaderLabels(["",""])
-        #self.scantailor.setHeaderHidden(True)
-        self.scantailor.setStyleSheet("background:white; border: 1px solid #6289b0")
-        self.scantailor.setFont(self._app.main_font(size=10))
-        self.scantailor.headerItem().setFont(0,self._app.main_font(size=10))
-        self.scantailor.headerItem().setFont(1,self._app.main_font(size=10))
-
-        v_layout.addWidget(self.tif_dir)
-        v_layout.addWidget(self.scantailor_fname)
-        v_layout.addWidget(self.scantailor)
-        main_widget = qtwidgets.QWidget()
-        main_widget.setLayout(v_layout)
-        main_widget.setStyleSheet("padding: 0px")
-        main_widget.setStyleSheet("border: 1px solid #6289b0")
-
-        v_layout.setMargin(0)
-        self.setWidget(main_widget)
-
-    def set_project(self,project): 
-        self.scantailor.clear()
-        self.tif_dir.setText(project["Tif directory"])
-        self.scantailor_fname.setText(project["Scantailor"]["name"])
-
-        def traverse(children,parent):
-            for child in children:
-                elem=qtwidgets.QTreeWidgetItem(parent)
-                tag=child["name"]
-                attrs=", ".join(["%s=%s" % (k,child["attributes"][k]) for k in child["attributes"]])
-                elem.setText(0,tag)
-                elem.setText(1,attrs)
-                if child["children"]:
-                    traverse(child["children"],parent=elem)
-
-        traverse(project["Scantailor"]["children"],self.scantailor)
-
 class DockMetadata(BaseDock):
 
     class MetadataModel(qtcore.QAbstractTableModel):
