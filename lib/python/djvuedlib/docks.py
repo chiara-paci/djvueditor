@@ -7,6 +7,8 @@ import PySide2.QtNetwork as qtnetwork
 import os.path
 import collections
 
+from . import widgets
+
 QSS_TITLES="text-align:center;background-color:#6289b0"
 #QSS_TITLES="text-align:center;border:1px solid #89a3d4"
 
@@ -52,6 +54,7 @@ class BaseDock(qtwidgets.QDockWidget):
     def __init__(self,title,application):
         self._app=application
         qtwidgets.QDockWidget.__init__(self,title,self._app.window)
+        self.setFont(self._app.main_font(size=10))
 
         #self.setFont(self._app.main_font("Bold",14))
         self.setStyleSheet(
@@ -89,6 +92,7 @@ class BaseDock(qtwidgets.QDockWidget):
 class DockScanTailor(BaseDock):
     def __init__(self,application):
         BaseDock.__init__(self,"ScanTailor",application)
+        self.setFont(self._app.main_font(size=10))
 
         v_layout = qtwidgets.QVBoxLayout()
         self.tif_dir=qtwidgets.QLabel()
@@ -103,6 +107,9 @@ class DockScanTailor(BaseDock):
         self.scantailor.setHeaderLabels(["",""])
         #self.scantailor.setHeaderHidden(True)
         self.scantailor.setStyleSheet("background:white; border: 1px solid #6289b0")
+        self.scantailor.setFont(self._app.main_font(size=10))
+        self.scantailor.headerItem().setFont(0,self._app.main_font(size=10))
+        self.scantailor.headerItem().setFont(1,self._app.main_font(size=10))
 
         v_layout.addWidget(self.tif_dir)
         v_layout.addWidget(self.scantailor_fname)
@@ -111,6 +118,7 @@ class DockScanTailor(BaseDock):
         main_widget.setLayout(v_layout)
         main_widget.setStyleSheet("padding: 0px")
         main_widget.setStyleSheet("border: 1px solid #6289b0")
+
         v_layout.setMargin(0)
         self.setWidget(main_widget)
 
@@ -178,6 +186,9 @@ class DockMetadata(BaseDock):
         self.view.setModel(self.model)
         #self.view.verticalHeader().setVisible(False)
         self.view.setStyleSheet("background:white; border: 1px solid #6289b0")
+        self.view.setFont(self._app.main_font(size=10))
+        self.view.horizontalHeader().setFont(self._app.main_font(size=10))
+        self.view.verticalHeader().setFont(self._app.main_font(size=10))
         self.setWidget(self.view)
 
     def set_project(self,project): 
@@ -217,3 +228,137 @@ class DockMetadata(BaseDock):
         t_layout.insertWidget(0,toolbar)
 
         return t_layout
+
+class DockConfiguration(BaseDock):
+
+    class ConfSpinBox(qtwidgets.QSpinBox):
+        def __init__(self,application,label):
+            qtwidgets.QSpinBox.__init__(self)
+            self._app=application
+            self._label=label
+            self.valueChanged.connect(self._changed)
+
+        def _changed(self):
+            val=self.value()
+            if self._app.project is not None:
+                self._app.project[self._label]=val
+
+        def set_project(self,project):
+            if self._label not in project: return
+            self.valueChanged.disconnect(self._changed)
+            self.setValue(project[self._label])
+            self.valueChanged.connect(self._changed)
+
+    class ConfEncodingLineEdit(qtwidgets.QLineEdit):
+        section="Encoding Options"
+
+        def __init__(self,application,label):
+            qtwidgets.QLineEdit.__init__(self)
+            self._app=application
+            self._label=label
+            self.textChanged.connect(self._changed)
+        
+        def _changed(self):
+            val=self.text()
+            if self._app.project is not None:
+                self._app.project[self.section][self._label]=val
+
+        def set_project(self,project):
+            if self._label not in project[self.section]: return
+            self.textChanged.disconnect(self._changed)
+            self.setText(project[self.section][self._label])
+            self.textChanged.connect(self._changed)
+
+    class ConfEncodingComboBox(qtwidgets.QComboBox):
+        section="Encoding Options"
+
+        def __init__(self,application,label,values):
+            qtwidgets.QComboBox.__init__(self)
+            self.setEditable(False)
+            self.setInsertPolicy(self.NoInsert)
+            self._app=application
+            self._label=label
+            
+            for v in values: self.addItem(v)
+
+            self.currentTextChanged.connect(self._changed)
+        
+        def _changed(self):
+            val=self.currentText()
+            print(val)
+            if self._app.project is not None:
+                self._app.project[self.section][self._label]=val
+
+        def set_project(self,project):
+            if self._label not in project[self.section]: return
+            self.currentTextChanged.disconnect(self._changed)
+            self.setCurrentText(project[self.section][self._label])
+            self.currentTextChanged.connect(self._changed)
+
+    class ConfOcrLineEdit(ConfEncodingLineEdit):
+        section="Ocr Options"
+
+    class ConfOcrComboBox(ConfEncodingComboBox):
+        section="Ocr Options"
+
+    def __init__(self,application):
+        self._app=application
+        BaseDock.__init__(self,"Configuration",application)
+        f_layout=qtwidgets.QFormLayout()
+
+        self.setFont(self._app.main_font(size=10))
+
+        self.widgets=[]
+
+        def add_row(lab,w):
+            f_layout.addRow(lab,w)
+            self.widgets.append(widget)
+            w.setFont(self._app.main_font(size=10))
+            f_layout.labelForField(w).setFont(self._app.main_font(size=10))
+            
+        
+        widget=self.ConfSpinBox(application,"Max threads")
+        widget.setMinimum(1)
+        add_row("Max threads",widget)
+
+        f_layout.addRow(qtwidgets.QLabel(""))
+
+        widget=self.ConfEncodingComboBox(application,"bitonal_encoder",
+                                        ["cjb2","minidjvu"])
+        add_row("Bitonal encoder",widget)
+
+        widget=self.ConfEncodingComboBox(application,"color_encoder",
+                                        ["csepdjvu","c44","cpaldjvu"])
+        add_row("Color encoder",widget)
+
+        for plabel in [ "c44_options",
+                        "cjb2_options",
+                        "cpaldjvu_options",
+                        "csepdjvu_options",
+                        "minidjvu_options" ]:
+            wlabel=plabel.capitalize().replace("_"," ")
+            widget=self.ConfEncodingLineEdit(application,plabel)
+            add_row(wlabel,widget)
+ 
+        f_layout.addRow(qtwidgets.QLabel(""))
+        widget=self.ConfOcrComboBox(application,"ocr_engine",
+                                    ["tesseract","cuneiform","no ocr"])
+        add_row("OCR engine",widget)
+
+        for plabel in [ "tesseract_options",
+                        "cuneiform_options" ]:
+            wlabel=plabel.capitalize().replace("_"," ")
+            widget=self.ConfOcrLineEdit(application,plabel)
+            add_row(wlabel,widget)
+        
+        f_widget=qtwidgets.QWidget(self)
+        f_widget.setLayout(f_layout)
+
+        self.setWidget(f_widget)
+
+    def set_project(self,project): 
+        for widget in self.widgets:
+            widget.set_project(project)
+        #self.c44_options.set_project(project)
+
+    

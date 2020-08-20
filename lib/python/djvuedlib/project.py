@@ -2,6 +2,10 @@ from . import abstracts
 import collections
 import os.path
 
+from . import book as libbook
+from . import ocr as libocr
+from . import encode as libencode
+
 
 class Project(abstracts.SerializedDict): 
 
@@ -64,13 +68,38 @@ class Project(abstracts.SerializedDict):
             with open(fname,'w') as fd:
                 for obj in self._list:
                     fd.write('%(key)s "%(value)s"\n' % obj)
+
+    class ProjectSubDict(abstracts.DictProxy):
+        def __init__(self,project,base=None):
+            abstracts.DictProxy.__init__(self,base=base)
+            self._project=project
+
+        def __delitem__(self,*args,**kwargs):  
+            ret=self._dict.__delitem__(*args,**kwargs)
+            self._project._save()
+            return ret
+
+        def __setitem__(self,*args,**kwargs): 
+            ret=self._dict.__setitem__(*args,**kwargs)
+            self._project._save()
+            return ret
+
+    @property
+    def base_dir(self):
+        return os.path.dirname(self._path)
                 
     def __init__(self,fpath):
         abstracts.SerializedDict.__init__(self,fpath)
-        if type(self["Metadata"]) in [  collections.OrderedDict, dict ]:
-            self["Metadata"]=list(self["Metadata"].items())
-            self._save()
-        self["Metadata"]=self.ProjectMetadata(self,self["Metadata"])
+        self.book=None
+        if "Metadata" in self:
+            if type(self["Metadata"]) in [  collections.OrderedDict, dict ]:
+                self["Metadata"]=list(self["Metadata"].items())
+            self["Metadata"]=self.ProjectMetadata(self,self["Metadata"])
+        else:
+            self["Metadata"]=self.ProjectMetadata(self)
+
+        self._setup_options()
+        self._setup_book()
 
     def new_project(self,metadata,scantailor_fname,xmltree):
         self.clear()
@@ -93,12 +122,53 @@ class Project(abstracts.SerializedDict):
         }
         traverse(root,self["Scantailor"])
         self._save()
+        self._setup_options()
+        self._setup_book()
 
-    @property
-    def base_dir(self):
-        return os.path.dirname(self._path)
+    def _setup_options(self):
+        if "Encoding Options" in self:
+            self["Encoding Options"]=self.ProjectSubDict(self,self["Encoding Options"])
+        else:
+            self["Encoding Options"]=self.ProjectSubDict(self)
 
-    def file_list(self):
+        for k,default in [ 
+                ("bitonal_encoder","cjb2"),
+                ("color_encoder","csepdjvu"),
+                ("c44_options",""),
+                ("cjb2_options","-lossy"),
+                ("cpaldjvu_options",""),
+                ("csepdjvu_options",""),
+                ("minidjvu_options","--match --pages-per-dict 100") ]:
+            if k not in self["Encoding Options"]:
+                self["Encoding Options"][k]=default
+
+        if "Ocr Options" in self:
+            self["Ocr Options"]=self.ProjectSubDict(self,self["Ocr Options"])
+        else:
+            self["Ocr Options"]=self.ProjectSubDict(self)
+
+        for k,default in [ 
+                ("ocr_engine","tesseract"),
+                ("tesseract_options",""),
+                ("cuneiform_options","") ]:
+            if k not in self["Ocr Options"]:
+                self["Ocr Options"][k]=default
+
+        if "Max threads" not in self: self["Max threads"]=10
+
+        self._save()
+
+    def _setup_book(self):
+        if "Pages" in self:
+            self["Pages"]=self.ProjectSubDict(self,self["Pages"])
+        else:
+            self["Pages"]=self.ProjectSubDict(self)
+        if "Tif directory" not in self: return
+        file_list=self._file_list()
+        self.book=libbook.Book()
+        self.book.set_pages(file_list)
+        
+    def _file_list(self):
         f_metadata=os.path.join(self["Tif directory"],"metadata")
         self["Metadata"].write_on(f_metadata)
 
@@ -110,9 +180,9 @@ class Project(abstracts.SerializedDict):
             # (f_bookmarks,"bookmarks",""), <--- da aggiungere
         ]
         if "Cover back" in self:
-            file_list.append( (self["Cover back"], "cover_back", "" ) )
+            file_list.append( (self["Cover back"], "cover_back", "cover" ) )
         if "Cover front" in self:
-            file_list.append( (self["Cover front"], "cover_front", "" ) )
+            file_list.append( (self["Cover front"], "cover_front", "back" ) )
         
         cback=self["Cover back"] if "Cover back" in self else ""
         cfront=self["Cover front"] if "Cover front" in self else ""
@@ -131,9 +201,28 @@ class Project(abstracts.SerializedDict):
         ### qui il modello si puo' complicare (title=numero di pagina)
         ### unico vincolo non ce ne devono essere due uguali
         ### v. djvubind
-        title=1
+        num=1
         for p in page_list:
-            file_list.append( (p,"page",str(title)) )
-            title+=1
-
+            if p in self["Pages"]:
+                title=self["Pages"][p]
+            else:
+                title=str(num)
+                self["Pages"][p]=title
+            file_list.append( (p,"page",title) )
+            num+=1
         return file_list
+
+    def apply_ocr(self):
+        max_threads=self["Max threads"]
+        ocr=libocr.Tesseract(self["Ocr Options"]['tesseract_options'])
+        print('Performing optical character recognition.')
+        self.book.apply_ocr(ocr,max_threads)
+        
+    def djvubind(self,djvu_name):
+        if len(self.book.pages) == 0: return
+        print('Binding %d file(s).' % len(self.book.pages))
+        enc_opts=self["Encoding Options"].copy()
+        enc_opts["ocr"]=(self["Ocr Options"]["ocr_engine"] != "no ocr")
+        print('Encoding all information to %s.' % djvu_name)
+        enc = libencode.Encoder(enc_opts)
+        enc.enc_book(self.book, djvu_name)

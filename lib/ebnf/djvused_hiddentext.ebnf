@@ -1,0 +1,26 @@
+(* 
+   grako bind_conf.ebnf > bind_conf_parser.py 
+*)
+
+grammar = list_rule $ ;
+list_rule = { rule }+ ;
+rule = '(' label xmin ymin xmax ymax content ')';
+
+xmin = integer;
+ymin = integer;
+xmax = integer;
+ymax = integer;
+integer = /\d+/;
+
+label = 'page' |  'column' |  'region' |  'para' |  'line' |  'word' | 'char';
+content = '"' etext '"' | { rule }+;
+
+etext = /[^"]*/ ;
+
+(*
+etext = { char }*;
+char = noquote | '\"' | double_backslash | isolated_backslash ;
+noquote = /[^\"]+/ ;
+double_backslash = { r'\\' }+ ;
+isolated_backslash = /(?<![\"])\\(?![\"])/;
+*)

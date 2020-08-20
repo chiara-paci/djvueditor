@@ -13,7 +13,7 @@ class NewProjectWizard(qtwidgets.QWizard):
             qtwidgets.QWizardPage.__init__(self)
             self.setTitle("New project")
             label = qtwidgets.QLabel(self.tr("This wizard will generate a skeleton for a new project, " \
-                                             "starting from a ScanTailor file."))
+                                             "starting from a ScanTailor output directory."))
             label.setWordWrap(True)
             
             layout = qtwidgets.QVBoxLayout()
@@ -90,6 +90,26 @@ class NewProjectWizard(qtwidgets.QWizard):
             return True
             
             #return qtwidgets.QWizardPage.isComplete(self)
+
+
+    class ScanTailorDirPage(qtwidgets.QWizardPage):
+        def __init__(self):
+            qtwidgets.QWizardPage.__init__(self)
+            self.setTitle("ScanTailor output dir")
+            self.setSubTitle("Specify a Scan Tailor output directory.")
+
+            self.scantailor_dir = widgets.OpenDirWidget()
+            self.errors= qtwidgets.QLabel()
+
+            v_layout = qtwidgets.QVBoxLayout()
+            layout = qtwidgets.QFormLayout()
+            layout.addRow("scantailor_dir*", self.scantailor_dir)
+            v_layout.addLayout(layout)
+            v_layout.addWidget(self.errors)
+
+            self.setLayout(v_layout)
+            self.registerField("scantailor_dir*", self.scantailor_dir.field)
+            self.scantailor_dir.field.textChanged.connect(self.completeChanged)
 
     class MetadataPage(qtwidgets.QWizardPage):
         def __init__(self):

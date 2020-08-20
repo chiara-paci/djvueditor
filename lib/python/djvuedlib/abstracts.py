@@ -14,9 +14,14 @@ class DictProxy(collections.abc.MutableMapping,abc.ABC):
 
     """
 
-    def __init__(self):
+    def __init__(self,base=None):
         collections.abc.MutableMapping.__init__(self)
-        self._dict=collections.OrderedDict()
+        if base is None:
+            self._dict=collections.OrderedDict()
+        else:
+            self._dict=collections.OrderedDict(base)
+    
+    def copy(self): return self._dict.copy()
 
     def __str__(self): return self._dict.__str__()
     def __repr__(self): return self._dict.__repr__()
@@ -92,7 +97,6 @@ class SerializedDict(DictProxy):
         self._fpath=fpath
         if os.path.exists(self._fpath):
             self._dict=jsonlib.json_load(self._fpath)
-
             for k in self._dict:
                 val=self._dict[k]
                 if isinstance(val,collections.OrderedDict):

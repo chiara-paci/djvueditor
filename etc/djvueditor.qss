@@ -1,9 +1,10 @@
-* {
+/* * {
     background-color:#e5edfb;
 }
 
 QMenu {
     background-color:#e5edfb;
-}
+} */
+
 
 

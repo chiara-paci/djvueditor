@@ -9,6 +9,22 @@ import os.path
 import signal
 import socket
 
+class HButtonBar(qtwidgets.QWidget):
+    layout=qtwidgets.QHBoxLayout
+
+    def __init__(self,def_list):
+        qtwidgets.QWidget.__init__(self)
+        b_layout=self.layout()
+        for label,callback in def_list:
+            button = qtwidgets.QPushButton(label)
+            button.clicked.connect(callback)
+            b_layout.addWidget(button)
+        self.setLayout(b_layout)
+
+class VButtonBar(HButtonBar):
+    layout=qtwidgets.QVBoxLayout
+        
+
 class OpenFileWidget(qtwidgets.QWidget):
 
     def __init__(self):
@@ -75,82 +91,6 @@ class OpenDirWidget(OpenFileWidget):
         if dialog.exec_():
             fnames = dialog.selectedFiles()
             self.field.setText(fnames[0])
-
-# QSS_TITLES="text-align:center;background-color:#6289b0"
-# #QSS_TITLES="text-align:center;border:1px solid #89a3d4"
-
-# class BaseDock(qtwidgets.QDockWidget):
-#     def __init__(self,title,application):
-#         self._app=application
-#         qtwidgets.QDockWidget.__init__(self,title,self._app.window)
-
-#         #self.setFont(self._app.main_font("Bold",14))
-#         self.setStyleSheet(
-#             "QDockWidget {color:white;} "
-#             "QDockWidget::title {%s}" % QSS_TITLES
-#         )
-        
-#         t_layout = qtwidgets.QHBoxLayout()
-
-
-#         title_w=qtwidgets.QLabel(title)
-#         title_w.setFont(self._app.main_font(style="SemiBold",size=10))
-#         title_w.setSizePolicy(qtwidgets.QSizePolicy.Expanding,qtwidgets.QSizePolicy.Expanding)
-#         title_w.setStyleSheet("color:white;%s" % QSS_TITLES)
-#         title_w.setAlignment(qtcore.Qt.AlignHCenter)
-
-#         toolbar=qtwidgets.QToolBar(parent=self)
-#         toolbar.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
-#         toolbar.setStyleSheet("color:white;%s" % QSS_TITLES)
-
-
-#         if self.isFloating():
-#             self._pin_action=toolbar.addAction("")
-#             self._pin_action.setFont(self._app.awesome_font(size=8))
-#             self._pin_action.setToolTip("unlocked: lock")
-#         else:
-#             self._pin_action=toolbar.addAction("")
-#             self._pin_action.setFont(self._app.awesome_font(size=8))
-#             self._pin_action.setToolTip("locked: unlock")
-
-#         self.status="pinned"
-
-#         self._pin_action.triggered.connect(self._pin_action_triggered)
-
-#         close_action=toolbar.addAction("")
-#         close_action.setFont(self._app.awesome_font(size=8))
-#         close_action.setToolTip("close")
-#         close_action.triggered.connect(self._close_action_triggered)
-        
-#         t_layout.addWidget(title_w)
-#         t_layout.addWidget(toolbar)
-
-#         t_layout.setMargin(0)
-
-#         bar_widget = qtwidgets.QWidget()
-#         bar_widget.setLayout(t_layout)
-#         bar_widget.setStyleSheet("padding:0;color:white;%s" % QSS_TITLES)
-
-#         self.setTitleBarWidget(bar_widget)
-
-#         self.topLevelChanged.connect(self._toplevel_changed)
-
-#     def _toplevel_changed(self,floating):
-#         if floating:
-#             self._pin_action.setText("")
-#             self._pin_action.setToolTip("unlocked: lock")
-#             return
-#         self._pin_action.setText("")
-#         self._pin_action.setToolTip("locked: unlock")
-
-#     def _pin_action_triggered(self): 
-#         if self.isFloating():
-#             self.setFloating(False)
-#         else:
-#             self.setFloating(True)
- 
-#     def _close_action_triggered(self): 
-#         self.hide()
 
 class SignalWakeupHandler(qtnetwork.QAbstractSocket):
 

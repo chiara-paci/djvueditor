@@ -302,7 +302,7 @@ class Tesseract(object):
         basename=page.basepath
         tesseractpath = utils.get_executable_path('tesseract')
 
-        if not os.path.exists(basename):
+        if not os.path.exists(basename+".hocr"):
             utils.execute('{0} "{1}" "{2}" {3} hocr'.format(tesseractpath, filename, basename, self.options))
 
         with open('{0}.hocr'.format(basename), 'r') as handle:
