@@ -124,3 +124,29 @@ class SignalWakeupHandler(qtnetwork.QAbstractSocket):
         self.signalReceived.emit(data[0])
 
     signalReceived = qtcore.Signal(int)
+
+class FormDialog(qtwidgets.QDialog):
+    def __init__(self,window,title,form,*args,**kwargs):
+        super().__init__(window,*args,**kwargs)
+        self.setWindowTitle(title)
+        flags = qtwidgets.QDialogButtonBox.Ok | qtwidgets.QDialogButtonBox.Cancel
+
+        button_box = qtwidgets.QDialogButtonBox(flags)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+
+        f_widget=qtwidgets.QWidget()
+        self._form=form
+        f_widget.setLayout(self._form)
+
+        v_layout = qtwidgets.QVBoxLayout()
+        v_layout.addWidget(f_widget)
+        v_layout.addWidget(button_box)
+        self.setLayout(v_layout)
+
+    def get_data(self):
+        print("dialog")
+        ret=self.exec_()
+        data=self._form.get_data()
+        data.append(ret==self.Accepted)
+        return tuple(data)

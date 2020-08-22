@@ -100,6 +100,11 @@ class DjvuFile(object):
         script+="save"
         self._djvused_script(script)
 
+    def set_thumbnails(self,size):
+        sedcmd="set-thumbnails %d; save" % size
+        self._djvused(sedcmd)
+        
+
 class ExternalEncoder(object):
     bitonal = False
 
@@ -411,6 +416,7 @@ class Encoder:
             index = index + 1
 
         outfile.add_pages_number(desc)
+        outfile.set_thumbnails(128)
 
         if os.path.isfile(tempfile):
             os.remove(tempfile)

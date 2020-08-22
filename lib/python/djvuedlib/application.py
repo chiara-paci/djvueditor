@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os.path
+import collections
 
 import PySide2.QtWidgets as qtwidgets
 import PySide2.QtCore as qtcore
@@ -10,11 +11,21 @@ from . import widgets
 from . import wizards
 from . import project as libproject
 from . import actions
+from . import models
 from . import docks
 from . import mainwidget
 
 import signal
 
+class DjvuEditorBatch(object):
+    def __init__(self,base_dir,project_fname):
+        self._project=libproject.Project(project_fname)
+
+    def save_djvu(self,djvu_name):
+        if not djvu_name.endswith(".djvu"):
+            djvu_name+=".djvu"
+        djvu_name=os.path.abspath(djvu_name)
+        self._project.djvubind(djvu_name)
 
 class DjvuEditorGui(qtwidgets.QApplication):
     _font_files=[
@@ -33,7 +44,6 @@ class DjvuEditorGui(qtwidgets.QApplication):
     def __init__(self,base_dir,open_file=None):
         ## path
         qss_fname=os.path.join(base_dir,"etc","djvueditor.qss")
-        self.djvubind_conf=os.path.join(base_dir,"etc","djvubind.conf")
         font_dir=os.path.join(base_dir,"share","fonts")
 
         ## init
@@ -77,18 +87,29 @@ class DjvuEditorGui(qtwidgets.QApplication):
         ##############################
         ## Docks
 
-        self.dock_metadata=docks.DockMetadata(self)
-        self.window.addDockWidget(qtcore.Qt.LeftDockWidgetArea, self.dock_metadata)
-        self.actions["open_dock_metadata"]=self.dock_metadata.toggleViewAction()
-        menus["View"].append("open_dock_metadata")
+        self.models={}
 
-        self.dock_configuration=docks.DockConfiguration(self)
-        self.window.addDockWidget(qtcore.Qt.LeftDockWidgetArea, self.dock_configuration)
-        self.actions["open_dock_configuration"]=self.dock_configuration.toggleViewAction()
-        menus["View"].append("open_dock_configuration")
+        self.models["page_numbering"]=models.PageNumberingModel()
+        self.models["outline"]=models.OutlineModel()
 
-        self.window.tabifyDockWidget(self.dock_metadata,self.dock_configuration)
+        self.docks=collections.OrderedDict()
 
+        for label,cls in [ ("metadata",docks.DockMetadata),
+                           ("configuration",docks.DockConfiguration),
+                           ("page_numbering",docks.DockPageNumbering),
+                           ("outline",docks.DockOutline) ]:
+            dock=cls(self)
+            self.window.addDockWidget(qtcore.Qt.LeftDockWidgetArea,dock)
+            self.actions["open_dock_%s" % label]=dock.toggleViewAction()
+            menus["View"].append("open_dock_%s" % label)
+            self.docks[label]=dock
+
+        self.docks["outline"].set_model(self.models["outline"])
+        self.docks["page_numbering"].set_model(self.models["page_numbering"])
+        
+        keys=list(self.docks.keys())
+        for i in range(len(keys)-1):
+            self.window.tabifyDockWidget(self.docks[keys[i]],self.docks[keys[i+1]])
         self.setup_menu_bar(menus)
 
         ###############################
@@ -106,6 +127,11 @@ class DjvuEditorGui(qtwidgets.QApplication):
         widgets.SignalWakeupHandler(self)
         signal.signal(signal.SIGINT, lambda sig,_: self.quit())
 
+    #     self.models["page_numbering"].pageNumberChanged.connect(self._update_page_numbers)
+
+    # def _update_page_numbers(self):
+    #     self.main.update_page_numbers()
+
     def main_font(self,style="Medium",size=12):
         font_db = qtgui.QFontDatabase()
         return font_db.font(self._font_family,style,size)
@@ -122,8 +148,10 @@ class DjvuEditorGui(qtwidgets.QApplication):
         self.refresh_project()
 
     def refresh_project(self):
-        self.dock_metadata.set_project(self.project)
-        self.dock_configuration.set_project(self.project)
+        for k in self.models:
+            self.models[k].set_project(self.project)
+        for k in self.docks:
+            self.docks[k].set_project(self.project)
         self.main.set_project(self.project)
 
     def new_project(self,project_fname,metadata,tiff_dir):

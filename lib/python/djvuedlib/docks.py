@@ -2,12 +2,13 @@
 
 import PySide2.QtWidgets as qtwidgets
 import PySide2.QtCore as qtcore
+import PySide2.QtGui as qtgui
 import PySide2.QtNetwork as qtnetwork
 
 import os.path
 import collections
 
-from . import widgets
+from . import widgets,abstracts,models
 
 QSS_TITLES="text-align:center;background-color:#6289b0"
 #QSS_TITLES="text-align:center;border:1px solid #89a3d4"
@@ -89,6 +90,94 @@ class BaseDock(qtwidgets.QDockWidget):
     def _close_action_triggered(self): 
         self.hide()
 
+    def set_project(self,project): pass
+
+class DockPageNumbering(BaseDock):
+    pageNumberChanged = qtcore.Signal()
+
+    class NumberDialog(qtwidgets.QDialog):
+        def __init__(self,window,*args,**kwargs):
+            super().__init__(window,*args,**kwargs)
+            self.setWindowTitle("Number")
+            flags = qtwidgets.QDialogButtonBox.Ok | qtwidgets.QDialogButtonBox.Cancel
+            button_box = qtwidgets.QDialogButtonBox(flags)
+            button_box.accepted.connect(self.accept)
+            button_box.rejected.connect(self.reject)
+
+            self.start=qtwidgets.QSpinBox()
+            self.start.setValue(1)
+            self.numtype=qtwidgets.QComboBox()
+            for v in ["arabic","roman lower","roman upper"]:
+                self.numtype.addItem(v)
+
+            f_layout=qtwidgets.QFormLayout()
+            f_layout.addRow("start", self.start)
+            f_layout.addRow("type", self.numtype)
+            f_widget=qtwidgets.QWidget(self)
+            f_widget.setLayout(f_layout)
+
+            v_layout = qtwidgets.QVBoxLayout()
+            v_layout.addWidget(f_widget)
+            v_layout.addWidget(button_box)
+            self.setLayout(v_layout)
+
+        def get_data(self):
+            ret=self.exec_()
+            start=self.start.value()
+            numtype=self.numtype.currentText()
+            return start,numtype,ret==self.Accepted
+
+    def __init__(self,application):
+        BaseDock.__init__(self,"Page Numbering",application)
+        self.view=qtwidgets.QTableView() 
+        self.view.setStyleSheet("background:white; border: 1px solid #6289b0")
+        self.view.setFont(self._app.main_font(size=10))
+        self.view.horizontalHeader().setFont(self._app.main_font(size=10))
+        self.view.horizontalHeader().setStretchLastSection(True)
+        self.view.verticalHeader().setFont(self._app.main_font(size=10))
+        self.view.setSelectionMode(self.view.SingleSelection)
+        self.view.setSelectionBehavior(self.view.SelectRows)
+        self.setWidget(self.view)
+
+    def set_model(self,model):
+        self.model=model
+        self.view.setModel(model)
+
+    def _number_from_triggered(self):
+        indexes = self.view.selectedIndexes()
+        dialog=self.NumberDialog(self.window())
+        start,numtype,ok=dialog.get_data()
+        if not ok: return
+        self.model.number_from(indexes[0],start,numtype)
+
+    def _number_triggered(self):
+        indexes = self.view.selectedIndexes()
+        dialog=self.NumberDialog(self.window())
+        start,numtype,ok=dialog.get_data()
+        if not ok: return
+        self.model.number(indexes,start,numtype)
+
+    def bar_layout(self,title):
+        t_layout = BaseDock.bar_layout(self,title)
+
+        toolbar=qtwidgets.QToolBar(parent=self)
+        toolbar.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
+        toolbar.setStyleSheet("color:white;%s" % QSS_TITLES)
+
+        add_action=toolbar.addAction("")
+        add_action.setFont(self._app.awesome_font(size=8))
+        add_action.setToolTip("number from selected page")
+        add_action.triggered.connect(self._number_from_triggered)
+
+        del_action=toolbar.addAction("")
+        del_action.setFont(self._app.awesome_font(size=8))
+        del_action.setToolTip("number selected pages")
+        del_action.triggered.connect(self._number_triggered)
+        
+        t_layout.insertWidget(0,toolbar)
+
+        return t_layout
+
 class DockMetadata(BaseDock):
 
     class MetadataModel(qtcore.QAbstractTableModel):
@@ -135,9 +224,13 @@ class DockMetadata(BaseDock):
         self.model=self.MetadataModel()
         self.view.setModel(self.model)
         #self.view.verticalHeader().setVisible(False)
+        self.view.setSelectionMode(self.view.SingleSelection)
+        self.view.setSelectionBehavior(self.view.SelectRows)
+
         self.view.setStyleSheet("background:white; border: 1px solid #6289b0")
         self.view.setFont(self._app.main_font(size=10))
         self.view.horizontalHeader().setFont(self._app.main_font(size=10))
+        self.view.horizontalHeader().setStretchLastSection(True)
         self.view.verticalHeader().setFont(self._app.main_font(size=10))
         self.setWidget(self.view)
 
@@ -148,15 +241,11 @@ class DockMetadata(BaseDock):
     def _add_action_triggered(self):
         self.model.add_row()
         self.model.layoutChanged.emit()
-        
-        print("add")
 
     def _delete_action_triggered(self):
         indexes = self.view.selectedIndexes()
         self.model.delete_rows(indexes)
         self.model.layoutChanged.emit()
-
-        print("delete",indexes)
 
     def bar_layout(self,title):
         t_layout = BaseDock.bar_layout(self,title)
@@ -235,7 +324,6 @@ class DockConfiguration(BaseDock):
         
         def _changed(self):
             val=self.currentText()
-            print(val)
             if self._app.project is not None:
                 self._app.project[self.section][self._label]=val
 
@@ -311,4 +399,203 @@ class DockConfiguration(BaseDock):
             widget.set_project(project)
         #self.c44_options.set_project(project)
 
-    
+### QUI (siamo narrowed!!!!!)
+
+class OutlineWidget(qtwidgets.QTreeView):
+
+    ### QUI
+    class RowDataDialog(qtwidgets.QDialog):
+
+        def __init__(self,window,pages,*args,title="",page=None,**kwargs):
+            super().__init__(window,*args,**kwargs)
+            self.setWindowTitle("Import area")
+        
+            flags = qtwidgets.QDialogButtonBox.Ok | qtwidgets.QDialogButtonBox.Cancel
+        
+            button_box = qtwidgets.QDialogButtonBox(flags)
+            button_box.accepted.connect(self.accept)
+            button_box.rejected.connect(self.reject)
+
+            self.page=qtwidgets.QComboBox()
+            for p in pages:
+                self.page.addItem(str(p),p)
+            if page is not None:
+                ind=pages.index(page)
+                self.page.setCurrentIndex(ind)
+
+            self.title=qtwidgets.QLineEdit()
+            if title: self.title.setText(title)
+
+            f_layout=qtwidgets.QFormLayout()
+            f_layout.addRow("title", self.title)
+            f_layout.addRow("page", self.page)
+            f_widget=qtwidgets.QWidget(self)
+            f_widget.setLayout(f_layout)
+
+            v_layout = qtwidgets.QVBoxLayout()
+            v_layout.addWidget(f_widget)
+            v_layout.addWidget(button_box)
+            self.setLayout(v_layout)
+
+        def get_data(self):
+            ret=self.exec_()
+            title=self.title.text()
+            page=self.page.currentData()
+            return title,page,ret==self.Accepted
+
+    def __init__(self):
+        qtwidgets.QTreeView.__init__(self)
+        self._project=None
+        #self._model=models.OutlineModel()
+        self._model=None
+        #self.setModel(self._model)
+        self.setAlternatingRowColors(True)
+        self.expandAll()
+        self.setSelectionMode(self.SingleSelection)
+        self.setSelectionBehavior(self.SelectRows)
+        self.setContextMenuPolicy(qtcore.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.row_menu_open)
+
+        self.shortcuts = {
+            "delete_row": qtwidgets.QShortcut(qtgui.QKeySequence.Delete, self),
+            "move_right": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_Tab),self),
+            "create_row": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_A),self),
+            "edit_row": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_E),self),
+        }
+        self.shortcuts["delete_row"].activated.connect(self.delete_row)
+        self.shortcuts["move_right"].activated.connect(self.move_right)
+        self.shortcuts["create_row"].activated.connect(self.create_row)
+        self.shortcuts["edit_row"].activated.connect(self.edit_row)
+
+    def setModel(self,model):
+        self._model=model
+        qtwidgets.QTreeView.setModel(self,model)
+
+    def set_project(self,project):
+        self._project=project
+        #self._model.set_project(project)
+
+    def refresh(self):
+        self._model.layoutChanged.emit()
+
+    def delete_row(self,index=None):
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        self._model.removeRow(index.row(),parent=self._model.parent(index))
+
+    def create_row(self,index=None):
+        print("CR1")
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        dialog=self.RowDataDialog(self.window(),self._project.book.pages)
+        title,page,ok=dialog.get_data()
+        if not ok: return
+        self._model.create_row(index,title,page)
+
+    def edit_row(self,index=None):
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        obj=index.internalPointer()
+        dialog=self.RowDataDialog(self.window(),self._project.book.pages,title=obj.title,page=obj.page)
+        title,page,ok=dialog.get_data()
+        if not ok: return
+        self._model.update_row(index,title,page)
+
+    def move_up(self,index=None):
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        new_index=self._model.move_up(index)
+        self.selectionModel().select(new_index,qtcore.QItemSelectionModel.Clear | qtcore.QItemSelectionModel.SelectCurrent | qtcore.QItemSelectionModel.Rows)
+
+    def move_down(self,index=None):
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        new_index=self._model.move_down(index)
+        self.selectionModel().select(new_index,qtcore.QItemSelectionModel.Clear | qtcore.QItemSelectionModel.SelectCurrent | qtcore.QItemSelectionModel.Rows)
+
+    def move_left(self,index=None):
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        new_index=self._model.move_left(index)
+        self.selectionModel().select(new_index,qtcore.QItemSelectionModel.Clear | qtcore.QItemSelectionModel.SelectCurrent | qtcore.QItemSelectionModel.Rows)
+
+    def move_right(self,index=None):
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        new_index=self._model.move_right(index)
+        self.selectionModel().select(new_index,qtcore.QItemSelectionModel.Clear | qtcore.QItemSelectionModel.SelectCurrent | qtcore.QItemSelectionModel.Rows)
+
+    def row_menu_open(self, point):
+        # Infos about the node selected.
+        index = self.indexAt(point)
+        if not index.isValid(): return
+        menu=qtwidgets.QMenu(self)
+
+        maction=menu.addAction("add")
+        maction.triggered.connect(lambda: self.create_row(index=index))
+        maction.setShortcut(qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_A)))
+        maction.setShortcutContext(qtcore.Qt.WindowShortcut)
+        maction.setShortcutVisibleInContextMenu(True)
+
+        maction=menu.addAction("edit")
+        maction.triggered.connect(lambda: self.edit_row(index=index))
+        maction.setShortcut(qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_E)))
+        maction.setShortcutContext(qtcore.Qt.WindowShortcut)
+        maction.setShortcutVisibleInContextMenu(True)
+
+        menu.addSeparator()
+        maction=menu.addAction("delete")
+        maction.triggered.connect(lambda: self.delete_row(index=index))
+        maction.setShortcut(qtgui.QKeySequence.Delete)
+        maction.setShortcutContext(qtcore.Qt.WindowShortcut)
+        maction.setShortcutVisibleInContextMenu(True)
+
+        menu.exec_(self.mapToGlobal(point))
+
+class DockOutline(BaseDock):
+
+    def __init__(self,application):
+        BaseDock.__init__(self,"Outline",application)
+        self.view=OutlineWidget() 
+        self.view.setStyleSheet("background:white; border: 1px solid #6289b0")
+        self.view.setFont(self._app.main_font(size=10))
+        self.setWidget(self.view)
+
+    def set_model(self,model):
+        self.view.setModel(model)
+
+    def set_project(self,project): 
+        self.view.set_project(project)
+
+    def bar_layout(self,title):
+        t_layout = BaseDock.bar_layout(self,title)
+
+        toolbar=qtwidgets.QToolBar(parent=self)
+        toolbar.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
+        toolbar.setStyleSheet("color:white;%s" % QSS_TITLES)
+
+        def add_action(icon,tooltip,callback):
+            action=toolbar.addAction(icon)
+            action.setFont(self._app.awesome_font(size=8))
+            action.setToolTip(tooltip)
+            action.triggered.connect(callback)
+            return action
+            
+        add_action("","add",lambda checked: self.view.create_row())
+        add_action("","edit",lambda checked: self.view.edit_row())
+        add_action("","delete",lambda checked: self.view.delete_row())
+        add_action("","move up",lambda checked: self.view.move_up())
+        add_action("","move down",lambda checked: self.view.move_down())
+        #add_action("","move left",lambda checked: self.view.move_left())
+        add_action("","move right",lambda checked: self.view.move_right())
+        
+        t_layout.insertWidget(0,toolbar)
+
+        return t_layout
+

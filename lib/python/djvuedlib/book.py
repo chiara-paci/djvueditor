@@ -19,6 +19,7 @@ class Book:
 
     def __init__(self):
         self.pages = []
+        self.pages_by_path={}
         self.cover_front = None
         self.cover_back = None
 
@@ -47,6 +48,7 @@ class Book:
                 print("     If you encounter problems with minidjvu, this is probably why.", file=sys.stderr)
             self.dpi = max(self.dpi,page.dpi)
             self.pages.append(page)
+            self.pages_by_path[page.path]=page
 
     def save_report(self):
         """
@@ -99,6 +101,12 @@ class Page(object):
     """
     Contains information relevant to a single page/image.
     """
+
+    def __str__(self):
+        label=os.path.basename(self.path)
+        if self.title is not None:
+            label="[%s] %s" % (self.title,label)
+        return label
 
     def __init__(self, path):
         self.path = os.path.abspath(path)

@@ -117,5 +117,87 @@ class SerializedDict(DictProxy):
         self._save()
         return ret
 
+class Sequence(object):
+    def __init__(self,start):
+        self._start=start
+        self._ind=start
 
-    
+    def __call__(self):
+        ret=self._ind
+        self._ind+=1
+        return ret
+
+class SequenceStr(Sequence):
+    def __call__(self):
+        return str(Sequence.__call__(self))
+
+class SequenceRoman(Sequence):
+    def __init__(self,start,lower=True):
+        self._lower=lower
+        Sequence.__init__(self,start)
+
+    def _roman_order(self,num,base,one,five,ten):
+        ret=""
+        if num>=5*base:
+            ret+=five
+            num-=5*base
+        while num >= base:
+            ret+=one
+            num-=base
+        if ret.endswith(five+one+one+one+one):
+            ret=ret[:-5]+one+ten
+        if ret.endswith(one+one+one+one):
+            ret=ret[:-4]+one+five
+        return ret,num
+
+    def _roman(self,num):
+        ret=""
+        while num >= 1000:
+            ret+="M"
+            num-=1000
+        val,num=self._roman_order(num,100,"C","D","M")
+        ret+=val
+        val,num=self._roman_order(num,10,"X","L","C")
+        ret+=val
+        val,num=self._roman_order(num,1,"I","V","X")
+        ret+=val
+        if self._lower: ret=ret.lower()
+        return ret
+
+        # if num>=500:
+        #     ret+="D"
+        #     num-=500
+        # while num >= 100:
+        #     ret+="C"
+        #     num-=100
+        # if ret.endswith("DCCCC"):
+        #     ret=ret[:-5]+"CM"
+        # if ret.endswith("CCCC"):
+        #     ret=ret[:-4]+"CD"
+
+        # if num>=50:
+        #     ret+="L"
+        #     num-=50
+        # while num >= 10:
+        #     ret+="X"
+        #     num-=10
+        # if ret.endswith("LXXXX"):
+        #     ret=ret[:-5]+"XC"
+        # if ret.endswith("XXXX"):
+        #     ret=ret[:-4]+"XD"
+
+        # if num>=5:
+        #     ret+="V"
+        #     num-=5
+        # while num >= 1:
+        #     ret+="I"
+        #     num-=1
+        # if ret.endswith("VIIII"):
+        #     ret=ret[:-5]+"IX"
+        # if ret.endswith("IIII"):
+        #     ret=ret[:-4]+"IV"
+
+    def __call__(self):
+        return self._roman(Sequence.__call__(self))
+
+

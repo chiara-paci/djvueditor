@@ -22,7 +22,6 @@ class ImageWidget(qtwidgets.QWidget):
             self.setScaledContents(True)
             self.setSizePolicy(qtwidgets.QSizePolicy.Ignored,qtwidgets.QSizePolicy.Ignored)
 
-
     class BackgroundWidget(LayerWidget):
         def setPixmap(self,inner_pixmap):
             pixmap=qtgui.QPixmap(self._pixmap_size+2*self._margin_size)
@@ -34,8 +33,6 @@ class ImageWidget(qtwidgets.QWidget):
             Y=self._margin_size.height()
             H=self._pixmap_size.height()
             W=self._pixmap_size.width()
-
-            print(X,Y,W,H)
 
             painter.drawPixmap(X,Y,inner_pixmap)
 
@@ -50,7 +47,6 @@ class ImageWidget(qtwidgets.QWidget):
 
             painter.end() 
             super().setPixmap(pixmap)
-        
 
     class HighlightWidget(LayerWidget):
         def highlight(self,rects):
@@ -233,18 +229,6 @@ class ImageWidget(qtwidgets.QWidget):
             pen.setColor(color)
             painter.setPen(pen)
             self._draw_mark(painter,X,Y,X0,Y0,H,W,SZ,back=False)
-
-            # flags=qtcore.Qt.AlignHCenter | qtcore.Qt.AlignVCenter
-
-            # YSZ=2*SZ
-            # XSZ=4*YSZ
-            # Xt=X-XSZ if X-X0>=XSZ else X
-            # Yt=Y-YSZ if Y-Y0>=YSZ else Y
-
-            # painter.drawLine(X,Y0,X,H+Y0)
-            # painter.drawLine(X0,Y,W+X0,Y)
-            # painter.drawText(Xt,Yt,XSZ,YSZ,flags,"(%d,%d)" % (X-X0,H-Y+Y0) )
-
             painter.end() 
             self.setPixmap(pixmap)
 
@@ -357,7 +341,6 @@ class ImageWidget(qtwidgets.QWidget):
         self._second_y_label.setText(str(y))
         self._second_c_label.setText(" , ")
         self._second_p_label.setText(" – ")
-
 
     def get_points(self):
         x1=self._first_x_label.text()
@@ -487,13 +470,8 @@ class OcrWidget(qtwidgets.QTreeView):
 
             return obj.content
 
-            #if obj.children: return ""
-            #return obj.text
-
         def flags(self,index):
             col=index.column()
-            #if col==0:
-            #    return qtcore.QAbstractItemModel.flags(self,index)
             if col!=5:
                 return qtcore.Qt.ItemIsEditable | qtcore.QAbstractItemModel.flags(self,index)
             obj=index.internalPointer()
@@ -546,7 +524,6 @@ class OcrWidget(qtwidgets.QTreeView):
             self.dataChanged.emit(parent, parent)
             self.layoutChanged.emit()
             return True
-            
 
         def merge_above_rule(self,index):
             self._page.merge_above_text_rule(index.internalPointer())
@@ -687,11 +664,28 @@ class OcrWidget(qtwidgets.QTreeView):
             row=self._page.index_text_rule(obj)
             return self.createIndex(row,0,obj)
 
+    
+    class ImportAreaForm(qtwidgets.QFormLayout):
+        def __init__(self,levels):
+            qtwidgets.QFormLayout.__init__(self)
+
+            self.level=qtwidgets.QComboBox()
+            for v in levels:
+                self.level.addItem(v)
+            self.text=qtwidgets.QLineEdit()
+
+            self.addRow("level", self.level)
+            self.addRow("text", self.text)
+
+        def get_data(self):
+            text=self.text.text()
+            level=self.level.currentText()
+            return [level,text]
 
     class ImportAreaDialog(qtwidgets.QDialog):
         def __init__(self,window,levels,*args,**kwargs):
             super().__init__(window,*args,**kwargs)
-            self.setWindowTitle("HELLO!")
+            self.setWindowTitle("Import area")
         
             flags = qtwidgets.QDialogButtonBox.Ok | qtwidgets.QDialogButtonBox.Cancel
         
@@ -775,7 +769,9 @@ class OcrWidget(qtwidgets.QTreeView):
         obj=index.internalPointer()
         levels=obj.sub_rule_levels()
         if not levels: return
-        dialog=self.ImportAreaDialog(self.window(),levels)
+        #dialog=self.ImportAreaDialog(self.window(),levels)
+        dialog=widgets.FormDialog(self.window(),"Import area",
+                                  self.ImportAreaForm(levels))
         level,text,ok=dialog.get_data()
         if not ok: return
         self._model.create_rule(index,level,xmin,ymin,xmax,ymax,text)
@@ -905,6 +901,8 @@ class OcrWidget(qtwidgets.QTreeView):
         self._select(index)
 
 class PageWidget(qtwidgets.QSplitter):
+    labelChanged = qtcore.Signal(object)
+
     class PageToolBar(qtwidgets.QToolBar):
 
         def _add_action(self,icon,tooltip,callback,style="Solid"):
@@ -959,6 +957,7 @@ class PageWidget(qtwidgets.QSplitter):
             self._page.title=val
             if self._app.project is not None:
                 self._app.project[self.section][self._page.path]=val
+            self._app.models["page_numbering"].layoutChanged.emit()
 
     def __init__(self,app,page):
         self._app=app
@@ -993,13 +992,12 @@ class PageWidget(qtwidgets.QSplitter):
         h_layout=qtwidgets.QHBoxLayout()
         h_widget=qtwidgets.QWidget()
         h_widget.setLayout(h_layout)
-        title_widget=self.TitleLineEdit(self._app,self._page)
-        h_layout.addWidget(title_widget)
+        self._title_widget=self.TitleLineEdit(self._app,self._page)
+        h_layout.addWidget(self._title_widget)
 
-        toolbar=self.PageToolBar(self)
-        h_layout.addWidget(toolbar,stretch=0)
+        self._title_widget.textChanged.connect(lambda: self.labelChanged.emit(self))
 
-
+        #h_layout.addWidget(toolbar,stretch=0)
         h_layout.addStretch(stretch=1)
 
         for t in [ page.format,
@@ -1012,7 +1010,11 @@ class PageWidget(qtwidgets.QSplitter):
         
         v_layout=qtwidgets.QVBoxLayout()
         v_layout.addWidget(h_widget,stretch=0)
+
+        toolbar=self.PageToolBar(self)
+        v_layout.addWidget(toolbar,stretch=0)
         v_layout.addWidget(tab,stretch=1)
+
 
         right_widget=qtwidgets.QWidget()
         right_widget.setLayout(v_layout)
@@ -1023,6 +1025,9 @@ class PageWidget(qtwidgets.QSplitter):
         #self._ocr_widget.model().dataChanged.connect(self._ocr_widget_data_changed)
 
     def _ocr(self): pass
+
+    def update_page_number(self):
+        self._title_widget.setText(self._page.title)
 
     def _save_text(self): 
         self._page.save_text_structure()
@@ -1035,10 +1040,11 @@ class PageWidget(qtwidgets.QSplitter):
 
     @property
     def label(self):
-        label=os.path.basename(self._page.path)
-        if self._page.title is not None:
-            label="[%s] %s" % (self._page.title,label)
-        return label
+        return str(self._page)
+        # label=os.path.basename(self._page.path)
+        # if self._page.title is not None:
+        #     label="[%s] %s" % (self._page.title,label)
+        # return label
 
     def _import_area(self):
         first,second=self._image.get_points()
@@ -1049,8 +1055,6 @@ class PageWidget(qtwidgets.QSplitter):
         ymin=min(first[1],second[1])
         ymax=max(first[1],second[1])
         self._ocr_widget.import_rule(xmin,ymin,xmax,ymax)
-
-
 
 class ProjectWidget(qtwidgets.QWidget):
 
@@ -1084,6 +1088,12 @@ class ProjectWidget(qtwidgets.QWidget):
         self.cover_front.field.textChanged.connect(self._cover_front_changed)
         self.cover_back.field.textChanged.connect(self._cover_back_changed)
 
+        self._app.models["page_numbering"].pageNumberChanged.connect(self._update_page_numbers)
+
+    def _update_page_numbers(self):
+        for w in self.tab.findChildren(PageWidget):
+            w.update_page_number()
+
     def _cover_front_changed(self):
         val=self.cover_front.text()
         self._app.project["Cover front"]=val
@@ -1092,11 +1102,16 @@ class ProjectWidget(qtwidgets.QWidget):
         val=self.cover_back.text()
         self._app.project["Cover back"]=val
 
+    def _page_label_changed(self,widget):
+        ind=self.tab.indexOf(widget)
+        self.tab.setTabText(ind,widget.label)
+
     def set_project(self,project): 
         self.tab.clear() # GC non cancella le pagine, le rimuove e basta
         for page in self._app.project.book.pages:
             widget=PageWidget(self._app,page)
             self.tab.addTab(widget,widget.label)
+            widget.labelChanged.connect(self._page_label_changed)
         
         #widget=CoverWidget()
         #self.tab.insertTab(0,widget,widget.label)

@@ -4,12 +4,8 @@
 import sys
 import os
 import argparse
-import prctl
-import signal
-import multiprocessing
-import socket
-from PySide2 import QtCore as qtcore, QtNetwork as qtnetwork
 
+import prctl
 prctl.set_name("djvueditor")
 prctl.set_proctitle("djvueditor "+" ".join(sys.argv[1:]))
 
@@ -17,37 +13,61 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(BASE_DIR,"opt","djvubind") )
 sys.path.insert(0, os.path.join(BASE_DIR,"lib","python") )
 
+import djvuedlib.jsonlib
+djvuedlib.jsonlib.json_settings()
+
+import djvuedlib
+import djvubind.utils
+
 parser = argparse.ArgumentParser(description="Data brocker")
 parser.add_argument('--version', action='version', version='%%(prog)s %s' % "0.1")
 
-parser.add_argument("-o","--open_file",
+parser.add_argument("-f","--open_file",
                     type=str,
                     help="open file",
                     metavar="FILE")
 
-import djvuedlib
-import djvubind.utils
-import djvuedlib.widgets
-import djvuedlib.jsonlib
+parser.add_argument("-o","--output_file",
+                    type=str,
+                    help="output file",
+                    metavar="FILE")
 
-djvuedlib.jsonlib.json_settings()
-
+parser.add_argument("-B","--batch",action="store_true")
 
 if __name__=='__main__':
 
-    ## djvubind check dipendenze
-    deps = ['cpaldjvu', 'cjb2', 'djvm', 'djvused', 'identify']
-    for dep in deps:
-        if (not djvubind.utils.is_executable(dep)):
-            print('err: __main__: external dependency ({0}) cannot be found.'.format(dep), file=sys.stderr)
-            sys.exit(1)
+    # ## djvubind check dipendenze
+    # deps = ['cpaldjvu', 'cjb2', 'djvm', 'djvused', 'identify']
+    # for dep in deps:
+    #     if (not djvubind.utils.is_executable(dep)):
+    #         print('err: __main__: external dependency ({0}) cannot be found.'.format(dep), file=sys.stderr)
+    #         sys.exit(1)
 
 
     options=parser.parse_args()
+
+    if options.batch:
+        if not options.open_file:
+            print("I need a djvueditor file")
+            sys.exit(1)
+        if not os.path.exists(options.open_file):
+            print("%s doesn't exist" % options.output_file)
+            sys.exit(2)
+        if not options.output_file:
+            print("I need an output file name")
+            sys.exit(3)
+        if os.path.exists(options.output_file):
+            print("%s already exists" % options.output_file)
+            sys.exit(4)
+
+        batch=djvuedlib.DjvuEditorBatch(BASE_DIR,options.open_file)
+        batch.save_djvu(options.output_file)
+        sys.exit(0)
+
+    
     kwargs={}
     if options.open_file and os.path.exists(options.open_file):
         kwargs["open_file"]=options.open_file
-    
     gui=djvuedlib.DjvuEditorGui(BASE_DIR,**kwargs)
 
     sys.exit(gui.exec_())

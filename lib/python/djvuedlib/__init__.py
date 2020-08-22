@@ -3,7 +3,10 @@ import PySide2.QtCore as qtcore
 import PySide2.QtGui as qtgui
 import os.path
 
-from .application import DjvuEditorGui
+from . import jsonlib
+jsonlib.json_settings()
+
+from .application import DjvuEditorGui,DjvuEditorBatch
 
 def setup(base_dir):
     font_dir=os.path.join(base_dir,"share","fonts")
