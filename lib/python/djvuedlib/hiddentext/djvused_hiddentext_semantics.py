@@ -211,6 +211,15 @@ class OcrBlock(object):
             self.children.insert(ind+1,dup)
         obj.text=splitted[0]
 
+    def pop_rule(self,obj): 
+        ind=self.children.index(obj)
+        return self.children.pop(ind)
+
+    def move_left(self,obj): 
+        p_ind=self.parent.index(self)
+        self.pop_rule(obj)
+        self.parent.insert_rule(p_ind+1,obj)
+
     def move_up(self,obj):
         ind=self.children.index(obj)
         if ind==0: return
@@ -458,7 +467,14 @@ class OcrGrammar(object):
         self.rules.pop(ind)
         self.rules.insert(ind+1,obj)
 
-    def move_left(self,obj): pass
+    def move_left(self,obj): 
+        if obj.parent is None: return
+        if obj.parent.parent is not None:
+            obj.parent.move_left(obj)
+            return
+        p_ind=self.rules.index(obj.parent)
+        obj.parent.pop_rule(obj)
+        self.rules.insert(p_ind+1,obj)
 
     def move_right(self,obj): 
         if obj.parent is not None:
@@ -468,7 +484,6 @@ class OcrGrammar(object):
         if ind==0: return
         self.rules.pop(ind)
         self.rules[ind-1].append_rule(obj)
-
 
 class HiddenTextSemantics(object):
     def __init__(self):

@@ -8,41 +8,42 @@ import PySide2.QtNetwork as qtnetwork
 import os.path
 import collections
 
-from . import widgets,abstracts,models
+from . import widgets,abstracts,models,actions
 
 QSS_TITLES="text-align:center;background-color:#6289b0"
 #QSS_TITLES="text-align:center;border:1px solid #89a3d4"
 
 class BaseDock(qtwidgets.QDockWidget):
-    def bar_layout(self,title):
+    dock_title=""
+
+    class DockToolBar(widgets.AwesomeToolBar):
+        def __init__(self,parent):
+            widgets.AwesomeToolBar.__init__(self,parent)
+            self.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
+            self.setStyleSheet("color:white;%s" % QSS_TITLES)
+
+    def bar_layout(self):
         t_layout = qtwidgets.QHBoxLayout()
 
-        title_w=qtwidgets.QLabel(title)
+        title_w=qtwidgets.QLabel(self.dock_title)
         title_w.setFont(self._app.main_font(style="SemiBold",size=10))
-        title_w.setSizePolicy(qtwidgets.QSizePolicy.Expanding,qtwidgets.QSizePolicy.Expanding)
+        title_w.setSizePolicy(qtwidgets.QSizePolicy.Expanding,
+                              qtwidgets.QSizePolicy.Expanding)
         title_w.setStyleSheet("color:white;%s" % QSS_TITLES)
         title_w.setAlignment(qtcore.Qt.AlignHCenter)
 
-        toolbar=qtwidgets.QToolBar(parent=self)
-        toolbar.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
-        toolbar.setStyleSheet("color:white;%s" % QSS_TITLES)
+        toolbar=self.DockToolBar(parent=self)
 
         if self.isFloating():
-            self._pin_action=toolbar.addAction("")
-            self._pin_action.setFont(self._app.awesome_font(size=8))
-            self._pin_action.setToolTip("unlocked: lock")
+            self._pin_action=toolbar.addAction("","unlocked: lock")
         else:
-            self._pin_action=toolbar.addAction("")
-            self._pin_action.setFont(self._app.awesome_font(size=8))
-            self._pin_action.setToolTip("locked: unlock")
+            self._pin_action=toolbar.addAction("","locked: unlock")
 
         self.status="pinned"
 
         self._pin_action.triggered.connect(self._pin_action_triggered)
 
-        close_action=toolbar.addAction("")
-        close_action.setFont(self._app.awesome_font(size=8))
-        close_action.setToolTip("close")
+        close_action=toolbar.addAction("","close")
         close_action.triggered.connect(self._close_action_triggered)
         
         t_layout.addWidget(title_w)
@@ -52,18 +53,17 @@ class BaseDock(qtwidgets.QDockWidget):
 
         return t_layout
 
-    def __init__(self,title,application):
+    def __init__(self,application):
         self._app=application
-        qtwidgets.QDockWidget.__init__(self,title,self._app.window)
+        qtwidgets.QDockWidget.__init__(self,self.dock_title,self._app.window)
         self.setFont(self._app.main_font(size=10))
 
-        #self.setFont(self._app.main_font("Bold",14))
         self.setStyleSheet(
             "QDockWidget {color:white;} "
             "QDockWidget::title {%s}" % QSS_TITLES
         )
 
-        t_layout=self.bar_layout(title)
+        t_layout=self.bar_layout()
 
         bar_widget = qtwidgets.QWidget()
         bar_widget.setLayout(t_layout)
@@ -92,180 +92,105 @@ class BaseDock(qtwidgets.QDockWidget):
 
     def set_project(self,project): pass
 
-class DockPageNumbering(BaseDock):
-    pageNumberChanged = qtcore.Signal()
-
-    class NumberDialog(qtwidgets.QDialog):
-        def __init__(self,window,*args,**kwargs):
-            super().__init__(window,*args,**kwargs)
-            self.setWindowTitle("Number")
-            flags = qtwidgets.QDialogButtonBox.Ok | qtwidgets.QDialogButtonBox.Cancel
-            button_box = qtwidgets.QDialogButtonBox(flags)
-            button_box.accepted.connect(self.accept)
-            button_box.rejected.connect(self.reject)
-
-            self.start=qtwidgets.QSpinBox()
-            self.start.setValue(1)
-            self.numtype=qtwidgets.QComboBox()
-            for v in ["arabic","roman lower","roman upper"]:
-                self.numtype.addItem(v)
-
-            f_layout=qtwidgets.QFormLayout()
-            f_layout.addRow("start", self.start)
-            f_layout.addRow("type", self.numtype)
-            f_widget=qtwidgets.QWidget(self)
-            f_widget.setLayout(f_layout)
-
-            v_layout = qtwidgets.QVBoxLayout()
-            v_layout.addWidget(f_widget)
-            v_layout.addWidget(button_box)
-            self.setLayout(v_layout)
-
-        def get_data(self):
-            ret=self.exec_()
-            start=self.start.value()
-            numtype=self.numtype.currentText()
-            return start,numtype,ret==self.Accepted
-
+class DockProjectTable(BaseDock):
     def __init__(self,application):
-        BaseDock.__init__(self,"Page Numbering",application)
+        BaseDock.__init__(self,application)
         self.view=qtwidgets.QTableView() 
         self.view.setStyleSheet("background:white; border: 1px solid #6289b0")
         self.view.setFont(self._app.main_font(size=10))
         self.view.horizontalHeader().setFont(self._app.main_font(size=10))
         self.view.horizontalHeader().setStretchLastSection(True)
         self.view.verticalHeader().setFont(self._app.main_font(size=10))
-        self.view.setSelectionMode(self.view.SingleSelection)
+        #self.view.setSelectionMode(self.view.SingleSelection)
         self.view.setSelectionBehavior(self.view.SelectRows)
         self.setWidget(self.view)
 
     def set_model(self,model):
         self.model=model
         self.view.setModel(model)
+    
+
+class DockPageNumbering(DockProjectTable):
+    pageNumberChanged = qtcore.Signal()
+
+    class NumberForm(qtwidgets.QFormLayout): 
+        def __init__(self):
+            qtwidgets.QFormLayout.__init__(self)
+            self.start=qtwidgets.QSpinBox()
+            self.start.setValue(1)
+            self.numtype=qtwidgets.QComboBox()
+            for v in ["arabic","roman lower","roman upper"]:
+                self.numtype.addItem(v)
+
+            self.addRow("start", self.start)
+            self.addRow("type", self.numtype)
+
+        def get_data(self):
+            start=self.start.value()
+            numtype=self.numtype.currentText()
+            return start,numtype
+
+    dock_title="Page Numbering"
 
     def _number_from_triggered(self):
         indexes = self.view.selectedIndexes()
-        dialog=self.NumberDialog(self.window())
+        dialog=widgets.FormDialog(self.window(),"Number from",self.NumberForm())
         start,numtype,ok=dialog.get_data()
         if not ok: return
         self.model.number_from(indexes[0],start,numtype)
 
     def _number_triggered(self):
         indexes = self.view.selectedIndexes()
-        dialog=self.NumberDialog(self.window())
+        dialog=widgets.FormDialog(self.window(),"Number selected",self.NumberForm())
         start,numtype,ok=dialog.get_data()
         if not ok: return
         self.model.number(indexes,start,numtype)
 
-    def bar_layout(self,title):
-        t_layout = BaseDock.bar_layout(self,title)
-
-        toolbar=qtwidgets.QToolBar(parent=self)
-        toolbar.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
-        toolbar.setStyleSheet("color:white;%s" % QSS_TITLES)
-
-        add_action=toolbar.addAction("")
-        add_action.setFont(self._app.awesome_font(size=8))
-        add_action.setToolTip("number from selected page")
-        add_action.triggered.connect(self._number_from_triggered)
-
-        del_action=toolbar.addAction("")
-        del_action.setFont(self._app.awesome_font(size=8))
-        del_action.setToolTip("number selected pages")
-        del_action.triggered.connect(self._number_triggered)
-        
+    def bar_layout(self):
+        t_layout = BaseDock.bar_layout(self)
+        toolbar=self.DockToolBar(parent=self)
+        action=toolbar.addAction( "","number from selected page")
+        action.triggered.connect(self._number_from_triggered)
+        action=toolbar.addAction("","number selected pages")
+        action.triggered.connect(self._number_triggered)
         t_layout.insertWidget(0,toolbar)
-
         return t_layout
 
-class DockMetadata(BaseDock):
+class DockMetadata(DockProjectTable):
 
-    class MetadataModel(qtcore.QAbstractTableModel):
-        def __init__(self, *args, metadata=None, **kwargs):
-            qtcore.QAbstractTableModel.__init__(self,*args, **kwargs)
-            self.metadata = metadata or []
+    class MetadataForm(qtwidgets.QFormLayout): 
+        def __init__(self):
+            qtwidgets.QFormLayout.__init__(self)
+            self.key=qtwidgets.QLineEdit()
+            self.value=qtwidgets.QLineEdit()
+            self.addRow("key", self.key)
+            self.addRow("value", self.value)
 
-        def rowCount(self, index):
-            return len(self.metadata)
+        def get_data(self):
+            key=self.key.text()
+            value=self.value.text()
+            return key,value
 
-        def columnCount(self,index):
-            return 2
-
-        def headerData(self,section,orientation,role):
-            if role not in [ qtcore.Qt.DisplayRole, qtcore.Qt.EditRole ]: return None
-            if orientation==qtcore.Qt.Orientation.Vertical:
-                return section+1
-            if section==0: return "key"
-            return "value"
-
-        def data(self, index, role):
-            if role not in [ qtcore.Qt.DisplayRole, qtcore.Qt.EditRole ]: return None
-            return self.metadata[index.row()][index.column()]
-
-        def setData(self,index,value,role):
-            if role not in [ qtcore.Qt.DisplayRole, qtcore.Qt.EditRole ]: return False
-            self.metadata[index.row()][index.column()]=value
-            self.dataChanged.emit(index, index)
-            return True
-
-        def delete_rows(self,indexes):
-            rows=list(set([ idx.row() for idx in indexes ]))
-            self.metadata.delete_items(rows)
-
-        def add_row(self):
-            self.metadata.add_empty_item()
-
-        def flags(self,index):
-            return qtcore.Qt.ItemIsEditable | qtcore.QAbstractTableModel.flags(self,index)
-
-    def __init__(self,application):
-        BaseDock.__init__(self,"Metadata",application)
-        self.view=qtwidgets.QTableView() 
-        self.model=self.MetadataModel()
-        self.view.setModel(self.model)
-        #self.view.verticalHeader().setVisible(False)
-        self.view.setSelectionMode(self.view.SingleSelection)
-        self.view.setSelectionBehavior(self.view.SelectRows)
-
-        self.view.setStyleSheet("background:white; border: 1px solid #6289b0")
-        self.view.setFont(self._app.main_font(size=10))
-        self.view.horizontalHeader().setFont(self._app.main_font(size=10))
-        self.view.horizontalHeader().setStretchLastSection(True)
-        self.view.verticalHeader().setFont(self._app.main_font(size=10))
-        self.setWidget(self.view)
-
-    def set_project(self,project): 
-        self.model.metadata=project["Metadata"]
-        self.model.layoutChanged.emit()
+    dock_title="Metadata"
 
     def _add_action_triggered(self):
-        self.model.add_row()
-        self.model.layoutChanged.emit()
+        dialog=widgets.FormDialog(self.window(),"Metadata",self.MetadataForm())
+        key,value,ok=dialog.get_data()
+        if not ok: return
+        self.model.add_metadata(key,value)
 
     def _delete_action_triggered(self):
         indexes = self.view.selectedIndexes()
         self.model.delete_rows(indexes)
-        self.model.layoutChanged.emit()
 
-    def bar_layout(self,title):
-        t_layout = BaseDock.bar_layout(self,title)
-
-        toolbar=qtwidgets.QToolBar(parent=self)
-        toolbar.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
-        toolbar.setStyleSheet("color:white;%s" % QSS_TITLES)
-
-        add_action=toolbar.addAction("")
-        add_action.setFont(self._app.awesome_font(size=8))
-        add_action.setToolTip("add")
+    def bar_layout(self):
+        t_layout = BaseDock.bar_layout(self)
+        toolbar=self.DockToolBar(parent=self)
+        add_action=toolbar.addAction("","add")
         add_action.triggered.connect(self._add_action_triggered)
-
-        del_action=toolbar.addAction("")
-        del_action.setFont(self._app.awesome_font(size=8))
-        del_action.setToolTip("delete")
+        del_action=toolbar.addAction("","delete")
         del_action.triggered.connect(self._delete_action_triggered)
-        
         t_layout.insertWidget(0,toolbar)
-
         return t_layout
 
 class DockConfiguration(BaseDock):
@@ -339,9 +264,11 @@ class DockConfiguration(BaseDock):
     class ConfOcrComboBox(ConfEncodingComboBox):
         section="Ocr Options"
 
+    dock_title="Configuration"
+
     def __init__(self,application):
         self._app=application
-        BaseDock.__init__(self,"Configuration",application)
+        BaseDock.__init__(self,application)
         f_layout=qtwidgets.QFormLayout()
 
         self.setFont(self._app.main_font(size=10))
@@ -397,25 +324,12 @@ class DockConfiguration(BaseDock):
     def set_project(self,project): 
         for widget in self.widgets:
             widget.set_project(project)
-        #self.c44_options.set_project(project)
-
-### QUI (siamo narrowed!!!!!)
 
 class OutlineWidget(qtwidgets.QTreeView):
 
-    ### QUI
-    class RowDataDialog(qtwidgets.QDialog):
-
-        def __init__(self,window,pages,*args,title="",page=None,**kwargs):
-            super().__init__(window,*args,**kwargs)
-            self.setWindowTitle("Import area")
-        
-            flags = qtwidgets.QDialogButtonBox.Ok | qtwidgets.QDialogButtonBox.Cancel
-        
-            button_box = qtwidgets.QDialogButtonBox(flags)
-            button_box.accepted.connect(self.accept)
-            button_box.rejected.connect(self.reject)
-
+    class RowDataForm(qtwidgets.QFormLayout):
+        def __init__(self,pages,title="",page=None):
+            qtwidgets.QFormLayout.__init__(self)
             self.page=qtwidgets.QComboBox()
             for p in pages:
                 self.page.addItem(str(p),p)
@@ -425,30 +339,18 @@ class OutlineWidget(qtwidgets.QTreeView):
 
             self.title=qtwidgets.QLineEdit()
             if title: self.title.setText(title)
-
-            f_layout=qtwidgets.QFormLayout()
-            f_layout.addRow("title", self.title)
-            f_layout.addRow("page", self.page)
-            f_widget=qtwidgets.QWidget(self)
-            f_widget.setLayout(f_layout)
-
-            v_layout = qtwidgets.QVBoxLayout()
-            v_layout.addWidget(f_widget)
-            v_layout.addWidget(button_box)
-            self.setLayout(v_layout)
+            self.addRow("title", self.title)
+            self.addRow("page", self.page)
 
         def get_data(self):
-            ret=self.exec_()
             title=self.title.text()
             page=self.page.currentData()
-            return title,page,ret==self.Accepted
+            return title,page
 
     def __init__(self):
         qtwidgets.QTreeView.__init__(self)
         self._project=None
-        #self._model=models.OutlineModel()
         self._model=None
-        #self.setModel(self._model)
         self.setAlternatingRowColors(True)
         self.expandAll()
         self.setSelectionMode(self.SingleSelection)
@@ -462,6 +364,8 @@ class OutlineWidget(qtwidgets.QTreeView):
             "create_row": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_A),self),
             "edit_row": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_E),self),
         }
+        for k in self.shortcuts:
+            self.shortcuts[k].setContext(qtcore.Qt.WidgetWithChildrenShortcut)
         self.shortcuts["delete_row"].activated.connect(self.delete_row)
         self.shortcuts["move_right"].activated.connect(self.move_right)
         self.shortcuts["create_row"].activated.connect(self.create_row)
@@ -488,7 +392,7 @@ class OutlineWidget(qtwidgets.QTreeView):
         print("CR1")
         if index is None:
             index=self.selectionModel().currentIndex()
-        dialog=self.RowDataDialog(self.window(),self._project.book.pages)
+        dialog=widgets.FormDialog(self.window(),"Create row",self.RowDataForm(self._project.book.pages))
         title,page,ok=dialog.get_data()
         if not ok: return
         self._model.create_row(index,title,page)
@@ -498,7 +402,7 @@ class OutlineWidget(qtwidgets.QTreeView):
             index=self.selectionModel().currentIndex()
         if not index.isValid(): return
         obj=index.internalPointer()
-        dialog=self.RowDataDialog(self.window(),self._project.book.pages,title=obj.title,page=obj.page)
+        dialog=widgets.FormDialog(self.window(),"Create row",self.RowDataForm(self._project.book.pages,title=obj.title,page=obj.page))
         title,page,ok=dialog.get_data()
         if not ok: return
         self._model.update_row(index,title,page)
@@ -539,13 +443,14 @@ class OutlineWidget(qtwidgets.QTreeView):
 
         maction=menu.addAction("add")
         maction.triggered.connect(lambda: self.create_row(index=index))
-        maction.setShortcut(qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_A)))
+
+        maction.setShortcut(qtgui.QKeySequence(qtcore.Qt.Key_A))
         maction.setShortcutContext(qtcore.Qt.WindowShortcut)
         maction.setShortcutVisibleInContextMenu(True)
 
         maction=menu.addAction("edit")
         maction.triggered.connect(lambda: self.edit_row(index=index))
-        maction.setShortcut(qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_E)))
+        maction.setShortcut(qtgui.QKeySequence(qtcore.Qt.Key_E))
         maction.setShortcutContext(qtcore.Qt.WindowShortcut)
         maction.setShortcutVisibleInContextMenu(True)
 
@@ -559,9 +464,10 @@ class OutlineWidget(qtwidgets.QTreeView):
         menu.exec_(self.mapToGlobal(point))
 
 class DockOutline(BaseDock):
+    dock_title="Outline"
 
     def __init__(self,application):
-        BaseDock.__init__(self,"Outline",application)
+        BaseDock.__init__(self,application)
         self.view=OutlineWidget() 
         self.view.setStyleSheet("background:white; border: 1px solid #6289b0")
         self.view.setFont(self._app.main_font(size=10))
@@ -573,17 +479,13 @@ class DockOutline(BaseDock):
     def set_project(self,project): 
         self.view.set_project(project)
 
-    def bar_layout(self,title):
-        t_layout = BaseDock.bar_layout(self,title)
-
-        toolbar=qtwidgets.QToolBar(parent=self)
-        toolbar.setSizePolicy(qtwidgets.QSizePolicy.Minimum,qtwidgets.QSizePolicy.Minimum)
-        toolbar.setStyleSheet("color:white;%s" % QSS_TITLES)
+    def bar_layout(self):
+        t_layout = BaseDock.bar_layout(self)
+        
+        toolbar=self.DockToolBar(parent=self)
 
         def add_action(icon,tooltip,callback):
-            action=toolbar.addAction(icon)
-            action.setFont(self._app.awesome_font(size=8))
-            action.setToolTip(tooltip)
+            action=toolbar.addAction(icon,tooltip)
             action.triggered.connect(callback)
             return action
             
@@ -594,7 +496,8 @@ class DockOutline(BaseDock):
         add_action("","move down",lambda checked: self.view.move_down())
         #add_action("","move left",lambda checked: self.view.move_left())
         add_action("","move right",lambda checked: self.view.move_right())
-        
+
+
         t_layout.insertWidget(0,toolbar)
 
         return t_layout

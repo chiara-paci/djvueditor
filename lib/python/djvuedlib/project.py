@@ -16,6 +16,15 @@ class OutlineRow(object):
         for ch in self.children:
             ch.parent=self
 
+    def output(self,indent):
+        S='%s("%s" "#%s"' % (indent,self._title,self._page.title)
+        if not self.children:
+            return S+")\n"
+        for obj in self.children:
+            S+=obj.output(indent=indent+"    ")
+        S+="%s)\n" % indent
+        return S
+
     @property
     def page(self):
         return self._page
@@ -66,7 +75,7 @@ class OutlineRow(object):
         self._project._save()
 
     def create_row(self,title,page):
-        self.insert_row(0,OutlineRow(self._project,title,page,[]))
+        self.append_row(OutlineRow(self._project,title,page,[]))
         self._project._save()
 
     def remove_rows(self,ind,count):
@@ -116,6 +125,19 @@ class Outline(object):
             S.append(OutlineRow(self._project,title,page,children))
         return S
 
+    def output(self):
+        S="(bookmarks\n"
+        for obj in self.rows:
+            S+=obj.output(indent="    ")
+        S+=")\n"
+        return S
+
+    def write_on(self,fname):
+        S=self.output()
+        print(S)
+        with open(fname,'w') as fd:
+            fd.write(S)
+
     def get_row(self,parent,ind):
         if parent is not None:
             return parent.get_row(ind)
@@ -147,12 +169,11 @@ class Outline(object):
         
     def create_row(self,parent,title,page):
         if parent is not None: return parent.create_row(title,page)
-        self.rows.insert(0,OutlineRow(self._project,title,page,[]))
+        self.rows.append(OutlineRow(self._project,title,page,[]))
         self._project._save()
 
     def update_row(self,obj,title,page):
         obj.update(title,page)
-
 
     def move_up(self,obj): 
         if obj.parent is not None:
@@ -217,6 +238,10 @@ class Project(abstracts.SerializedDict):
             self._list=[ obj for obj in self._list if obj not in to_remove ]
             self._project._save()
 
+        def add_metadata(self,key,value):
+            self._list.append( Project.ProjectMetadataItem(self._project,key,value) )
+            self._project._save()
+
         def add_empty_item(self):
             self._list.append( Project.ProjectMetadataItem(self._project,"","") )
             self._project._save()
@@ -265,7 +290,7 @@ class Project(abstracts.SerializedDict):
 
     @property
     def base_dir(self):
-        return os.path.dirname(self._path)
+        return os.path.dirname(self._fpath)
                 
     def __init__(self,fpath):
         abstracts.SerializedDict.__init__(self,fpath)
@@ -316,6 +341,13 @@ class Project(abstracts.SerializedDict):
         self._setup_options()
         self._setup_book()
 
+    # def _setup_annotations(self):
+    #     if "Background" not in self: self["Background"]="#ffffff"
+    #     if "Zoom" not in self: self["Zoom"]="d100"
+    #     if "Mode" not in self: self["Mode"]="color"
+    #     if "Horizontal Align" not in self: self["Horizontal Align"]="center"
+    #     if "Vertical Align" not in self: self["Vertical Align"]="center"
+
     def _setup_options(self):
         if "Encoding Options" in self:
             self["Encoding Options"]=self.ProjectSubDict(self,self["Encoding Options"])
@@ -361,14 +393,14 @@ class Project(abstracts.SerializedDict):
         
     def _file_list(self):
         f_metadata=os.path.join(self["Tiff directory"],"metadata")
-        self["Metadata"].write_on(f_metadata)
+        #self["Metadata"].write_on(f_metadata)
 
         f_bookmarks=os.path.join(self["Tiff directory"],"bookmarks")
-        # da aggiungere <------
+        #self["Outline"].write_on(f_bookmarks)
 
         file_list=[
             (f_metadata,"metadata",""),
-            # (f_bookmarks,"bookmarks",""), <--- da aggiungere
+            (f_bookmarks,"bookmarks",""),
         ]
         if "Cover back" in self:
             file_list.append( (self["Cover back"], "cover_back", "cover" ) )
@@ -417,6 +449,9 @@ class Project(abstracts.SerializedDict):
         if len(self.book.pages) == 0: return
         f_metadata=os.path.join(self["Tiff directory"],"metadata")
         self["Metadata"].write_on(f_metadata)
+        f_bookmarks=os.path.join(self["Tiff directory"],"bookmarks")
+        self["Outline"].write_on(f_bookmarks)
+
         print('Binding %d file(s).' % len(self.book.pages))
         enc_opts=self["Encoding Options"].copy()
         enc_opts["ocr"]=(self["Ocr Options"]["ocr_engine"] != "no ocr")

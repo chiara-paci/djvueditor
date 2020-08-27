@@ -2,6 +2,7 @@
 
 import os.path
 import re
+import datetime
 
 import PySide2.QtWidgets as qtwidgets
 import PySide2.QtCore as qtcore
@@ -9,6 +10,7 @@ import PySide2.QtGui as qtgui
 
 from . import widgets
 from . import hiddentext
+from . import models
 
 class ImageWidget(qtwidgets.QWidget):
     class LayerWidget(qtwidgets.QLabel):
@@ -405,266 +407,9 @@ class ImageWidget(qtwidgets.QWidget):
         adjust_scroll_bar(self._scroll.verticalScrollBar(), factor)
 
 class OcrWidget(qtwidgets.QTreeView):
-    class OcrModel(qtcore.QAbstractItemModel):
+    ruleSelected = qtcore.Signal(object)
+    outlineRequested = qtcore.Signal(object)
 
-        def __init__(self,page,*args,**kwargs):
-            self._page=page
-            qtcore.QAbstractItemModel.__init__(self,*args,**kwargs)
-            self._columns=["level","xmin","ymin","xmax","ymax","content"]
-            #self._rules=self._page.text_structure.rules
-
-        def headerData(self,section,orientation,role):
-            if role == qtcore.Qt.TextAlignmentRole:
-                if section in [1,2,3,4]:
-                    return qtcore.Qt.AlignRight
-                return None
-            if role not in [ qtcore.Qt.DisplayRole, qtcore.Qt.EditRole ]: 
-                return qtcore.QAbstractItemModel.headerData(self,section,orientation,role)
-            if orientation==qtcore.Qt.Orientation.Vertical:
-                return qtcore.QAbstractItemModel.headerData(self,section,orientation,role)
-            return self._columns[section]
-
-        def columnCount(self,index):
-            return 6
-
-        def rowCount(self, index = qtcore.QModelIndex()):
-            if index.isValid():  # internal nodes
-                obj = index.internalPointer()
-            else:
-                obj=None
-            return self._page.count_children_text_rule(obj)
-
-        def index(self,row,column,parent=qtcore.QModelIndex()): 
-            if not parent.isValid(): 
-                parent_obj=None
-            else:
-                parent_obj = parent.internalPointer()
-            obj=self._page.get_text_rule(parent_obj,row)
-            if not obj: return qtcore.QModelIndex()
-            return self.createIndex(row, column, obj)
-
-        def parent(self, index):
-            if not index.isValid():
-                return qtcore.QModelIndex()
-            child=index.internalPointer()
-            if child.parent is None: return qtcore.QModelIndex()
-            row=self._page.index_text_rule(child.parent)
-            return self.createIndex(row,0,child.parent)
-
-        def data(self, index, role):
-            if not index.isValid(): return None
-            if role not in [ qtcore.Qt.DisplayRole, qtcore.Qt.EditRole, 
-                             qtcore.Qt.TextAlignmentRole ]: 
-                return None
-            obj=index.internalPointer()
-            col=index.column()
-            if role == qtcore.Qt.TextAlignmentRole:
-                if col in [1,2,3,4]:
-                    return qtcore.Qt.AlignRight
-                return None
-            if col==0: return obj.level
-            if col==1: return obj.xmin
-            if col==2: return obj.ymin
-            if col==3: return obj.xmax
-            if col==4: return obj.ymax
-
-            return obj.content
-
-        def flags(self,index):
-            col=index.column()
-            if col!=5:
-                return qtcore.Qt.ItemIsEditable | qtcore.QAbstractItemModel.flags(self,index)
-            obj=index.internalPointer()
-            if obj.children:
-                return qtcore.QAbstractItemModel.flags(self,index)
-            return qtcore.Qt.ItemIsEditable | qtcore.QAbstractItemModel.flags(self,index)
-
-        def setData(self,index,value,role):
-            if role not in [ qtcore.Qt.DisplayRole, qtcore.Qt.EditRole ]: return False
-            col=index.column()
-            obj=index.internalPointer()
-            if col==0:
-                obj.level=value
-                self.dataChanged.emit(index, index)
-                return True
-            if col==5:
-                if obj.children: return False
-                obj.text=value
-                self.dataChanged.emit(index, index)
-                return True
-            try:
-                if col==1: obj.xmin=int(value)
-                if col==2: obj.ymin=int(value)
-                if col==3: obj.xmax=int(value)
-                if col==4: obj.ymax=int(value)
-            except ValueError as e:
-                return False
-            self.dataChanged.emit(index, index)
-            return True
-
-        def insertRows(self,row,count,parent=qtcore.QModelIndex()):
-            self.beginInsertRows(parent,row,row+count-1)
-            if not parent.isValid():
-                parent_obj=None
-            else:
-                parent_obj=parent.internalPointer()
-            self._page.insert_text_rules(parent_obj,row,count)
-            self.endInsertRows()            
-            self.layoutChanged.emit()
-            return True
-
-        def duplicateRow(self,index):
-            self._page.duplicate_text_rule(index.internalPointer())
-            self.layoutChanged.emit()
-            return True
-
-        def create_rule(self,parent,level,xmin,ymin,xmax,ymax,text):
-            self._page.create_text_rule(parent.internalPointer(),level,
-                                        xmin,ymin,xmax,ymax,text)
-            self.dataChanged.emit(parent, parent)
-            self.layoutChanged.emit()
-            return True
-
-        def merge_above_rule(self,index):
-            self._page.merge_above_text_rule(index.internalPointer())
-            self.dataChanged.emit(index, index)
-            self.layoutChanged.emit()
-            return True
-            
-        def merge_below_rule(self,index):
-            self._page.merge_below_text_rule(index.internalPointer())
-            self.dataChanged.emit(index, index)
-            self.layoutChanged.emit()
-            return True
-            
-        def removeRows(self,row,count,parent=qtcore.QModelIndex()):
-            self.beginRemoveRows(parent,row,row+count-1)
-            if not parent.isValid():
-                parent_obj=None
-            else:
-                parent_obj=parent.internalPointer()
-            self._page.remove_text_rules(parent_obj,row,count)
-            self.endRemoveRows()            
-            self.layoutChanged.emit()
-            return True
-
-        def upper_rule(self,index):
-            obj=index.internalPointer()
-            if obj.children: return False
-            obj.text=obj.text.upper()
-            self.dataChanged.emit(index, index)
-            return True
-
-        def lower_rule(self,index):
-            obj=index.internalPointer()
-            if obj.children: return False
-            obj.text=obj.text.lower()
-            self.dataChanged.emit(index, index)
-            return True
-
-        def capitalize_rule(self,index):
-            obj=index.internalPointer()
-            if obj.children: return False
-            obj.text=obj.text.capitalize()
-            self.dataChanged.emit(index, index)
-            return True
-
-        def _accentize(self,txt):
-            if txt[-1] not in "aeiouèéAEIOUÈÉ": return txt
-            if txt[-1]=="a": return txt[:-1]+"à"
-            if txt[-1]=="i": return txt[:-1]+"ì"
-            if txt[-1]=="o": return txt[:-1]+"ò"
-            if txt[-1]=="u": return txt[:-1]+"ù"
-            if txt[-1]=="è": return txt[:-1]+"é"
-            if txt[-1]=="é": return txt[:-1]+"è"
-            if txt[-1]=="A": return txt[:-1]+"À"
-            if txt[-1]=="I": return txt[:-1]+"Ì"
-            if txt[-1]=="O": return txt[:-1]+"Ò"
-            if txt[-1]=="U": return txt[:-1]+"Ù"
-            if txt[-1]=="È": return txt[:-1]+"É"
-            if txt[-1]=="É": return txt[:-1]+"È"
-            if txt=="e": return "è"
-            if txt=="E": return "È"
-            if txt.lower()=="ce":
-                if txt[-1]=="e": return txt[:-1]+"'è"
-                if txt[-1]=="E": return txt[:-1]+"'È"
-            if txt.lower().endswith("che"):
-                if txt[-1]=="e": return txt[:-1]+"é"
-                if txt[-1]=="E": return txt[:-1]+"É"
-            if txt[-1]=="e": return txt[:-1]+"è"
-            if txt[-1]=="E": return txt[:-1]+"È"
-
-        def accentize_rule(self,index):
-            obj=index.internalPointer()
-            if obj.children: return False
-            obj.text=self._accentize(obj.text)
-            self.dataChanged.emit(index, index)
-            return True
-
-        def crop_to_children(self,index):
-            obj=index.internalPointer()
-            obj.crop_to_children()
-            self.dataChanged.emit(index, index)
-
-        def split_rule(self,index,splitted):
-            obj=index.internalPointer()
-            self._page.split_rule(obj,splitted)
-            self.dataChanged.emit(index, index)
-            self.layoutChanged.emit()
-
-        def shift_down_rule(self,index,val):
-            obj=index.internalPointer()
-            self._page.shift_down_text_rule(obj,val)
-            self.dataChanged.emit(index, index)
-            self.layoutChanged.emit()
-
-        def shift_up_rule(self,index,val):
-            obj=index.internalPointer()
-            self._page.shift_up_text_rule(obj,val)
-            self.dataChanged.emit(index, index)
-            self.layoutChanged.emit()
-
-        def shift_right_rule(self,index,val):
-            obj=index.internalPointer()
-            self._page.shift_right_text_rule(obj,val)
-            self.dataChanged.emit(index, index)
-            self.layoutChanged.emit()
-
-        def shift_left_rule(self,index,val):
-            obj=index.internalPointer()
-            self._page.shift_left_text_rule(obj,val)
-            self.dataChanged.emit(index, index)
-            self.layoutChanged.emit()            
-
-        def move_up(self,index):
-            obj=index.internalPointer()
-            self._page.move_up(obj)
-            self.layoutChanged.emit()
-            row=self._page.index_text_rule(obj)
-            return self.createIndex(row,0,obj)
-
-        def move_down(self,index):
-            obj=index.internalPointer()
-            self._page.move_down(obj)
-            self.layoutChanged.emit()
-            row=self._page.index_text_rule(obj)
-            return self.createIndex(row,0,obj)
-
-        def move_left(self,index):
-            obj=index.internalPointer()
-            self._page.move_left(obj)
-            self.layoutChanged.emit()
-            row=self._page.index_text_rule(obj)
-            return self.createIndex(row,0,obj)
-
-        def move_right(self,index):
-            obj=index.internalPointer()
-            self._page.move_right(obj)
-            self.layoutChanged.emit()
-            row=self._page.index_text_rule(obj)
-            return self.createIndex(row,0,obj)
-
-    
     class ImportAreaForm(qtwidgets.QFormLayout):
         def __init__(self,levels):
             qtwidgets.QFormLayout.__init__(self)
@@ -680,47 +425,12 @@ class OcrWidget(qtwidgets.QTreeView):
         def get_data(self):
             text=self.text.text()
             level=self.level.currentText()
-            return [level,text]
+            return level,text
 
-    class ImportAreaDialog(qtwidgets.QDialog):
-        def __init__(self,window,levels,*args,**kwargs):
-            super().__init__(window,*args,**kwargs)
-            self.setWindowTitle("Import area")
-        
-            flags = qtwidgets.QDialogButtonBox.Ok | qtwidgets.QDialogButtonBox.Cancel
-        
-            button_box = qtwidgets.QDialogButtonBox(flags)
-            button_box.accepted.connect(self.accept)
-            button_box.rejected.connect(self.reject)
-
-            self.level=qtwidgets.QComboBox()
-            for v in levels:
-                self.level.addItem(v)
-            self.text=qtwidgets.QLineEdit()
-
-            f_layout=qtwidgets.QFormLayout()
-            f_layout.addRow("level", self.level)
-            f_layout.addRow("text", self.text)
-            f_widget=qtwidgets.QWidget(self)
-            f_widget.setLayout(f_layout)
-
-            v_layout = qtwidgets.QVBoxLayout()
-            v_layout.addWidget(f_widget)
-            v_layout.addWidget(button_box)
-            self.setLayout(v_layout)
-
-        def get_data(self):
-            ret=self.exec_()
-            text=self.text.text()
-            level=self.level.currentText()
-            return level,text,ret==self.Accepted
-
-
-    def __init__(self,page,select_callback):
+    def __init__(self,page):
         self._page=page
-        self._select_callback=select_callback
         qtwidgets.QTreeView.__init__(self)
-        self._model=self.OcrModel(page)
+        self._model=models.OcrModel(page)
         self.setModel(self._model)
         self.setAlternatingRowColors(True)
         self.expandAll()
@@ -740,15 +450,29 @@ class OcrWidget(qtwidgets.QTreeView):
 
         self.shortcuts = {
             "delete_rows": qtwidgets.QShortcut(qtgui.QKeySequence.Delete, self),
-            "crop_to_children": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_C),
-                                                    self),
-            "save": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_S),self),
+            "crop_to_children": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_X),self),
             "move_right": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_Tab),self),
+            "accentize": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_QuoteLeft),self),
+            "fix_apostrophes": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_Apostrophe),self),
+            "lower": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_L),self),
+            "upper": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_U),self),
+            "capitalize": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_C),self),
+
+            "save": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_S),self),
             "import_area": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_A),self),
+            "in_outline": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_O),self),
         }
+        for k in self.shortcuts:
+            self.shortcuts[k].setContext(qtcore.Qt.WidgetWithChildrenShortcut)
         self.shortcuts["delete_rows"].activated.connect(self._delete_selected_rule)
-        self.shortcuts["crop_to_children"].activated.connect(self._crop_to_children_selected_rule)
         self.shortcuts["move_right"].activated.connect(self.move_right)
+        self.shortcuts["crop_to_children"].activated.connect(self._crop_to_children_selected_rule)
+        self.shortcuts["lower"].activated.connect(self._lower_selected_rule)
+        self.shortcuts["upper"].activated.connect(self._upper_selected_rule)
+        self.shortcuts["capitalize"].activated.connect(self._capitalize_selected_rule)
+        self.shortcuts["accentize"].activated.connect(self._accentize_selected_rule)
+        self.shortcuts["fix_apostrophes"].activated.connect(self._fix_apostrophes_selected_rule)
+        self.shortcuts["in_outline"].activated.connect(self._insert_in_outline)
 
     def refresh(self):
         self._model.layoutChanged.emit()
@@ -763,13 +487,43 @@ class OcrWidget(qtwidgets.QTreeView):
         if not index.isValid(): return
         self._model.crop_to_children(index)
 
+    def _insert_in_outline(self,index=None):
+        if index is None:
+            index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        self.outlineRequested.emit(index.internalPointer())
+
+    def _lower_selected_rule(self):
+        index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        self._model.lower_rule(index)
+
+    def _upper_selected_rule(self):
+        index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        self._model.upper_rule(index)
+
+    def _capitalize_selected_rule(self):
+        index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        self._model.capitalize_rule(index)
+
+    def _accentize_selected_rule(self):
+        index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        self._model.accentize_rule(index)
+
+    def _fix_apostrophes_selected_rule(self):
+        index=self.selectionModel().currentIndex()
+        if not index.isValid(): return
+        self._model.fix_apostrophes_rule(index)
+
     def import_rule(self,xmin,ymin,xmax,ymax):
         index=self.selectionModel().currentIndex()
         if not index.isValid(): return
         obj=index.internalPointer()
         levels=obj.sub_rule_levels()
         if not levels: return
-        #dialog=self.ImportAreaDialog(self.window(),levels)
         dialog=widgets.FormDialog(self.window(),"Import area",
                                   self.ImportAreaForm(levels))
         level,text,ok=dialog.get_data()
@@ -825,6 +579,14 @@ class OcrWidget(qtwidgets.QTreeView):
         maction.setShortcut(qtgui.QKeySequence(qtcore.Qt.Key_C))
         maction.setShortcutContext(qtcore.Qt.WindowShortcut)
         maction.setShortcutVisibleInContextMenu(True)
+
+        menu.addSeparator()
+        maction=menu.addAction("insert in outline")
+        maction.triggered.connect(lambda: self._insert_in_outline(index))
+        maction.setShortcut(qtgui.QKeySequence(qtcore.Qt.Key_O))
+        maction.setShortcutContext(qtcore.Qt.WindowShortcut)
+        maction.setShortcutVisibleInContextMenu(True)
+
         menu.addSeparator()
 
         maction=menu.addAction("shift area up")
@@ -846,6 +608,8 @@ class OcrWidget(qtwidgets.QTreeView):
         maction.triggered.connect(lambda: self._model.capitalize_rule(index))
         maction=menu.addAction("accentize")
         maction.triggered.connect(lambda: self._model.accentize_rule(index))
+        maction=menu.addAction("fix_apostrophes")
+        maction.triggered.connect(lambda: self._model.fix_apostrophes_rule(index))
 
         menu.addSeparator()
         maction=menu.addAction("delete")
@@ -889,7 +653,7 @@ class OcrWidget(qtwidgets.QTreeView):
             index=self.selectionModel().currentIndex()
         if not index.isValid(): return
         rule=index.internalPointer()
-        self._select_callback(rule)
+        self.ruleSelected.emit(rule)
 
     def _data_changed(self,top_left,bottom_right,roles=[]):
         self._select(top_left)
@@ -937,8 +701,8 @@ class PageWidget(qtwidgets.QSplitter):
             self.addSeparator()
             self._add_action("","move up",lambda checked: self._main._ocr_widget.move_up())
             self._add_action("","move down",lambda checked: self._main._ocr_widget.move_down())
-            #self._add_action("","move left",lambda checked: self._main._ocr_widget.move_left())
             self._add_action("","move right",lambda checked: self._main._ocr_widget.move_right())
+            self._add_action("","move left",lambda checked: self._main._ocr_widget.move_left())
 
             
     class TitleLineEdit(qtwidgets.QLineEdit):
@@ -959,6 +723,8 @@ class PageWidget(qtwidgets.QSplitter):
                 self._app.project[self.section][self._page.path]=val
             self._app.models["page_numbering"].layoutChanged.emit()
 
+    
+
     def __init__(self,app,page):
         self._app=app
         self._page=page
@@ -977,13 +743,9 @@ class PageWidget(qtwidgets.QSplitter):
         self._ocr_area=qtwidgets.QTextEdit()
         if self._page.text is not None:
             self._ocr_area.setPlainText(self._page.text)
-        self._ocr_widget=OcrWidget(self._page,self._image.highlight_rule)
-        self._ocr_widget.setFont(self._app.main_font(size=10))
-        self._ocr_area.setFont(self._app.main_font(size=10))
-
-        self._ocr_widget.shortcuts["save"].activated.connect(self._save_text)
-        self._ocr_widget.shortcuts["import_area"].activated.connect(self._import_area)
-
+        self._ocr_widget=OcrWidget(self._page) 
+        self._ocr_widget.setFont(self._app.main_font(size=12))
+        self._ocr_area.setFont(self._app.main_font(size=12))
 
         tab.addTab(self._ocr_widget,"tree")
         tab.addTab(self._ocr_area,"txt")
@@ -996,6 +758,8 @@ class PageWidget(qtwidgets.QSplitter):
         h_layout.addWidget(self._title_widget)
 
         self._title_widget.textChanged.connect(lambda: self.labelChanged.emit(self))
+        self._ocr_widget.ruleSelected.connect(lambda rule: self._image.highlight_rule(rule))
+        self._ocr_widget.outlineRequested.connect(self._insert_in_outline)
 
         #h_layout.addWidget(toolbar,stretch=0)
         h_layout.addStretch(stretch=1)
@@ -1020,31 +784,76 @@ class PageWidget(qtwidgets.QSplitter):
         right_widget.setLayout(v_layout)
         self.addWidget(right_widget)
 
-        ### Signals
-        #self._ocr_widget.selectionModel().selectionChanged.connect(self._ocr_widget_selection_changed)
-        #self._ocr_widget.model().dataChanged.connect(self._ocr_widget_data_changed)
+        self.shortcuts = {
+            "save": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_S),self),
+            "import_area": qtwidgets.QShortcut(qtgui.QKeySequence(qtcore.Qt.Key_A),self),
+        }
+        for k in self.shortcuts:
+            self.shortcuts[k].setContext(qtcore.Qt.WidgetWithChildrenShortcut)
+
+        self.shortcuts["save"].activated.connect(self._save_text)
+        self.shortcuts["import_area"].activated.connect(self._import_area)
 
     def _ocr(self): pass
 
     def update_page_number(self):
         self._title_widget.setText(self._page.title)
 
+    @property
+    def page_number(self):
+        return self._page.title
+
     def _save_text(self): 
         self._page.save_text_structure()
         self._ocr_area.setPlainText(self._page.text)
+        self._app.emit_status("%s saved" % str(self._page))
 
     def _reload_text(self): 
         self._page.reload_text()
         self._ocr_widget.refresh()
         self._ocr_area.setPlainText(self._page.text)
 
+    class InsertInOutlineForm(qtwidgets.QFormLayout):
+
+        class ProxyModel(widgets.AddRootProxyModel):
+            def data(self,index,role):
+                if role!=qtcore.Qt.UserRole:
+                    return widgets.AddRootProxyModel.data(self,index,role)
+                if not index.isValid(): return qtcore.QModelIndex()
+                return self.mapToSource(index)
+                # obj=index.internalPointer()
+                # if obj==self.root: return qtcore.QModelIndex()
+                # return index
+
+        def __init__(self,outline_model):
+            qtwidgets.QFormLayout.__init__(self)
+            model=self.ProxyModel()
+            model.setSourceModel(outline_model)
+            self.parent=qtwidgets.QComboBox()
+            self.parent.setModel(model)
+            view=qtwidgets.QTreeView()
+            self.parent.setView(view)
+            view.setColumnHidden(1,True)
+            view.hideColumn(1)
+            view.expandAll()
+            self.addRow("parent", self.parent)
+
+        def get_data(self):
+            parent=self.parent.currentData(qtcore.Qt.UserRole)
+            return (parent,)
+
+
+    def _insert_in_outline(self,rule):
+        dialog=widgets.FormDialog(self.window(),"Select parent outline",
+                                  self.InsertInOutlineForm(self._app.models["outline"]))
+        parent,ok=dialog.get_data()
+        if not ok: return
+        self._app.models["outline"].create_row(parent,rule.content,self._page)
+        print("P",parent,rule)
+
     @property
     def label(self):
         return str(self._page)
-        # label=os.path.basename(self._page.path)
-        # if self._page.title is not None:
-        #     label="[%s] %s" % (self._page.title,label)
-        # return label
 
     def _import_area(self):
         first,second=self._image.get_points()
@@ -1105,6 +914,12 @@ class ProjectWidget(qtwidgets.QWidget):
     def _page_label_changed(self,widget):
         ind=self.tab.indexOf(widget)
         self.tab.setTabText(ind,widget.label)
+
+    def goto_page(self,pagenum):
+        for w in self.tab.findChildren(PageWidget):
+            if w.page_number==pagenum:
+                self.tab.setCurrentWidget(w)
+                break
 
     def set_project(self,project): 
         self.tab.clear() # GC non cancella le pagine, le rimuove e basta

@@ -2,6 +2,7 @@ import os
 import sys
 import wand.image
 import traceback
+import grako.exceptions
 
 #from djvubind import utils
 
@@ -97,6 +98,22 @@ class Cover(object):
             self.format=img.format
 
 
+def read_text_structure_decorator(func):
+    def decorated(self,*args,**kwargs):
+        if self._text_structure is None: return None
+        ret=func(self,*args,**kwargs)
+        return ret
+    return decorated
+
+def text_structure_decorator(func):
+    def decorated(self,*args,**kwargs):
+        print("decorated!!!")
+        if self._text_structure is None: return None
+        ret=func(self,*args,**kwargs)
+        self.save_text_structure()
+        return ret
+    return decorated
+
 class Page(object):
     """
     Contains information relevant to a single page/image.
@@ -141,6 +158,9 @@ class Page(object):
             self._text_cache=None
             self._text_structure=None
             return
+        except grako.exceptions.FailedToken as e:
+            self._text_structure=None
+            print("Grako error:",self._text_path)
 
     def _get_text(self):
         self._load_text()
@@ -148,9 +168,14 @@ class Page(object):
 
     def _set_text(self, val):
         self._text_cache=val
-        self._text_structure=hiddentext.djvused_parse_text(val)
         with open(self._text_path, 'w') as fd:
             fd.write(self._text_cache)
+        try:
+            self._text_structure=hiddentext.djvused_parse_text(val)
+        except grako.exceptions.FailedToken as e:
+            self._text_structure=None
+            print("Grako error:",self._text_path)
+
 
     text=property(_get_text,_set_text)
 
@@ -171,6 +196,7 @@ class Page(object):
 
     def save_text_structure(self):
         txt=self._text_structure.out_tree()
+        print("Save!")
         self._text_cache=txt
         with open(self._text_path, 'w') as fd:
             fd.write(self._text_cache)
@@ -180,76 +206,97 @@ class Page(object):
         boxing = ocr.analyze(self)
         self.text = libocr.translate(boxing)
         return self.text
-        
-    def insert_text_rules(self,parent,ind,count):
-        if self._text_structure is None: return
-        return self._text_structure.insert_rules(parent,ind,count)
 
-    def remove_text_rules(self,parent,ind,count):
-        if self._text_structure is None: return
-        return self._text_structure.remove_rules(parent,ind,count)
+    ###
 
+    @read_text_structure_decorator
     def index_text_rule(self,obj):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.index(obj)
-         
-    def duplicate_text_rule(self,obj):
-        if self._text_structure is None: return None
-        return self._text_structure.duplicate_rule(obj)
 
-    def create_text_rule(self,parent,level,xmin,ymin,xmax,ymax,text):
-        if self._text_structure is None: return None
-        return self._text_structure.create_rule(parent,level,xmin,ymin,xmax,ymax,text)
-
-    def merge_above_text_rule(self,obj):
-        if self._text_structure is None: return None
-        return self._text_structure.merge_above_rule(obj)
-         
-    def merge_below_text_rule(self,obj):
-        if self._text_structure is None: return None
-        return self._text_structure.merge_below_rule(obj)
-         
+    @read_text_structure_decorator
     def count_children_text_rule(self,obj):
-        if self._text_structure is None: return 0
+        # if self._text_structure is None: return 0
         return self._text_structure.count_children(obj)
 
+    @read_text_structure_decorator
     def get_text_rule(self,parent,ind):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.get_rule(parent,ind)
 
+    @text_structure_decorator
+    def insert_text_rules(self,parent,ind,count):
+        # if self._text_structure is None: return
+        return self._text_structure.insert_rules(parent,ind,count)
+
+    @text_structure_decorator
+    def remove_text_rules(self,parent,ind,count):
+        # if self._text_structure is None: return
+        return self._text_structure.remove_rules(parent,ind,count)
+         
+    @text_structure_decorator
+    def duplicate_text_rule(self,obj):
+        # if self._text_structure is None: return None
+        return self._text_structure.duplicate_rule(obj)
+
+    @text_structure_decorator
+    def create_text_rule(self,parent,level,xmin,ymin,xmax,ymax,text):
+        # if self._text_structure is None: return None
+        return self._text_structure.create_rule(parent,level,xmin,ymin,xmax,ymax,text)
+
+    @text_structure_decorator
+    def merge_above_text_rule(self,obj):
+        # if self._text_structure is None: return None
+        return self._text_structure.merge_above_rule(obj)
+         
+    @text_structure_decorator
+    def merge_below_text_rule(self,obj):
+        # if self._text_structure is None: return None
+        return self._text_structure.merge_below_rule(obj)
+         
+    @text_structure_decorator
     def split_rule(self,obj,splitted):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.split_rule(obj,splitted)
 
+    @text_structure_decorator
     def shift_down_text_rule(self,obj,val):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.shift_down_rule(obj,val)
 
+    @text_structure_decorator
     def shift_up_text_rule(self,obj,val):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.shift_up_rule(obj,val)
 
+    @text_structure_decorator
     def shift_right_text_rule(self,obj,val):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.shift_right_rule(obj,val)
 
+    @text_structure_decorator
     def shift_left_text_rule(self,obj,val):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.shift_left_rule(obj,val)
 
+    @text_structure_decorator
     def move_up(self,obj):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.move_up(obj)
 
+    @text_structure_decorator
     def move_down(self,obj):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.move_down(obj)
 
+    @text_structure_decorator
     def move_left(self,obj):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.move_left(obj)
-
+    
+    @text_structure_decorator
     def move_right(self,obj):
-        if self._text_structure is None: return None
+        # if self._text_structure is None: return None
         return self._text_structure.move_right(obj)
+
 

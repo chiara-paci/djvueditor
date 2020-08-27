@@ -43,12 +43,8 @@ class ActionNew(qtwidgets.QAction):
         metadata=[]
         for label in [ "title","author","date","subject" ]:
             metadata.append( [label,wizard.field(label)] )
-        #scantailor_fname=wizard.field("scantailor_fname")
         tiff_dir=wizard.field("tiff_dir")
         project_fname=wizard.field("project_fname")
-
-        # self._app.new_project(project_fname,metadata,scantailor_fname,
-        #                       wizard.scantailor_page.xmltree)
         self._app.new_project(project_fname,metadata,tiff_dir)
 
 class ActionOpen(qtwidgets.QAction):
@@ -72,3 +68,4 @@ class ActionOpen(qtwidgets.QAction):
         if not dialog.exec_(): return
         fnames = dialog.selectedFiles()
         self._app.open_project(fnames[0])
+

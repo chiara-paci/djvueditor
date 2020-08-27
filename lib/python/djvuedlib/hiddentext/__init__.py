@@ -8,12 +8,10 @@ from . import djvused_hiddentext_semantics
 from .djvused_hiddentext_semantics import OcrBlock as DjvusedOcrBlock
 
 def djvused_parse_text(text):
-
     text=re.sub(r'\s+',' ',text)
     text=text.strip()
     text=re.sub(r'\\\\','&#92;',text)
     text=re.sub(r'\\"','&#34;',text)
-    
     semantics=djvused_hiddentext_semantics.HiddenTextSemantics()
     parser=djvused_hiddentext_parser.djvused_hiddentextParser()
     return parser.parse(text,rule_name='grammar',semantics=semantics) 

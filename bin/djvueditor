@@ -32,6 +32,11 @@ parser.add_argument("-o","--output_file",
                     help="output file",
                     metavar="FILE")
 
+parser.add_argument("-p","--page_num",
+                    type=str,
+                    help="page num",
+                    metavar="NUM")
+
 parser.add_argument("-B","--batch",action="store_true")
 
 if __name__=='__main__':
@@ -68,6 +73,9 @@ if __name__=='__main__':
     kwargs={}
     if options.open_file and os.path.exists(options.open_file):
         kwargs["open_file"]=options.open_file
+    if options.page_num:
+        kwargs["page_num"]=options.page_num
+    
     gui=djvuedlib.DjvuEditorGui(BASE_DIR,**kwargs)
 
     sys.exit(gui.exec_())

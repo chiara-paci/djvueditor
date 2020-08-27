@@ -2,13 +2,13 @@
 
 import os.path
 import collections
+import datetime
 
 import PySide2.QtWidgets as qtwidgets
 import PySide2.QtCore as qtcore
 import PySide2.QtGui as qtgui
 
 from . import widgets
-from . import wizards
 from . import project as libproject
 from . import actions
 from . import models
@@ -41,32 +41,21 @@ class DjvuEditorGui(qtwidgets.QApplication):
         print("")
         self.window.close()
 
-    def __init__(self,base_dir,open_file=None):
-        ## path
-        qss_fname=os.path.join(base_dir,"etc","djvueditor.qss")
-        font_dir=os.path.join(base_dir,"share","fonts")
-
-        ## init
+    def __init__(self,base_dir,open_file=None,page_num=None):
         qtwidgets.QApplication.__init__(self,[])
         self.project=None
 
+        font_dir=os.path.join(base_dir,"share","fonts")
         for fname in self._font_files:
             fpath=os.path.join(font_dir,fname)
             font_id = qtgui.QFontDatabase.addApplicationFont(fpath)
 
-        font_db = qtgui.QFontDatabase()
-        font_families = font_db.families()
-        #font_styles = font_db.styles('FontAwesome')
-        #font_styles = font_db.styles('Raleway')
-        #x=font_db.font("Font Awesome 5 Free",None,10)
-        #print(x)
-
         self.window=qtwidgets.QMainWindow()
-        #self.window.resize(1500,1000)
         self.window.resize(1500,700)
         self.window.setFont(self.main_font())
         self.window.setWindowTitle("DjvuEditor")
 
+        qss_fname=os.path.join(base_dir,"etc","djvueditor.qss")
         self._set_stylesheet(qss_fname) 
 
         ##############################
@@ -83,21 +72,25 @@ class DjvuEditorGui(qtwidgets.QApplication):
             "View": [ ],
         }
 
-
         ##############################
-        ## Docks
+        ## Models
 
         self.models={}
 
         self.models["page_numbering"]=models.PageNumberingModel()
         self.models["outline"]=models.OutlineModel()
+        self.models["metadata"]=models.MetadataModel()
+
+        ##############################
+        ## Docks
 
         self.docks=collections.OrderedDict()
 
-        for label,cls in [ ("metadata",docks.DockMetadata),
-                           ("configuration",docks.DockConfiguration),
-                           ("page_numbering",docks.DockPageNumbering),
-                           ("outline",docks.DockOutline) ]:
+        for label,cls in [ 
+                ("configuration",docks.DockConfiguration),
+                ("metadata",docks.DockMetadata),
+                ("page_numbering",docks.DockPageNumbering),
+                ("outline",docks.DockOutline) ]:
             dock=cls(self)
             self.window.addDockWidget(qtcore.Qt.LeftDockWidgetArea,dock)
             self.actions["open_dock_%s" % label]=dock.toggleViewAction()
@@ -105,16 +98,17 @@ class DjvuEditorGui(qtwidgets.QApplication):
             self.docks[label]=dock
 
         self.docks["outline"].set_model(self.models["outline"])
+        self.docks["metadata"].set_model(self.models["metadata"])
         self.docks["page_numbering"].set_model(self.models["page_numbering"])
         
         keys=list(self.docks.keys())
         for i in range(len(keys)-1):
             self.window.tabifyDockWidget(self.docks[keys[i]],self.docks[keys[i+1]])
-        self.setup_menu_bar(menus)
 
         ###############################
         ## Main
 
+        self.setup_menu_bar(menus)
         self.main=mainwidget.ProjectWidget(self)
         self.window.setCentralWidget(self.main)
         
@@ -123,14 +117,9 @@ class DjvuEditorGui(qtwidgets.QApplication):
 
         self.emit_status("Ready")
         if open_file is not None:
-            self.open_project(open_file)
+            self.open_project(open_file,page_num=page_num)
         widgets.SignalWakeupHandler(self)
         signal.signal(signal.SIGINT, lambda sig,_: self.quit())
-
-    #     self.models["page_numbering"].pageNumberChanged.connect(self._update_page_numbers)
-
-    # def _update_page_numbers(self):
-    #     self.main.update_page_numbers()
 
     def main_font(self,style="Medium",size=12):
         font_db = qtgui.QFontDatabase()
@@ -142,8 +131,17 @@ class DjvuEditorGui(qtwidgets.QApplication):
         font=font_db.font(family,style,size)
         return font
 
-    def open_project(self,project_fname):
+    def open_project(self,project_fname,page_num=None):
         self.project=libproject.Project(project_fname)
+        self.window.setWindowTitle("DjvuEditor: "+project_fname)
+        self.refresh_project()
+        if page_num is None: return
+        self.main.goto_page(page_num)
+        
+
+    def new_project(self,project_fname,metadata,tiff_dir):
+        self.project=libproject.Project(project_fname)
+        self.project.new_project(metadata,tiff_dir)
         self.window.setWindowTitle("DjvuEditor: "+project_fname)
         self.refresh_project()
 
@@ -153,12 +151,6 @@ class DjvuEditorGui(qtwidgets.QApplication):
         for k in self.docks:
             self.docks[k].set_project(self.project)
         self.main.set_project(self.project)
-
-    def new_project(self,project_fname,metadata,tiff_dir):
-        self.project=libproject.Project(project_fname)
-        self.project.new_project(metadata,tiff_dir)
-        self.window.setWindowTitle("DjvuEditor: "+project_fname)
-        self.refresh_project()
 
     def _set_stylesheet(self,qss_fname):
         with open(qss_fname,'r') as fd:
@@ -179,7 +171,8 @@ class DjvuEditorGui(qtwidgets.QApplication):
                     menu.addAction(self.actions[action])
             mbar.addMenu(menu)
 
-    def emit_status(self,msg):
+    def emit_status(self,msg,*args,**kwargs):
+        msg="[%s] %s" % (str(datetime.datetime.today()),msg)
         self.window.statusBar().showMessage(msg)
 
     def exec_(self):
