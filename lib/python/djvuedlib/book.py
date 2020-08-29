@@ -13,77 +13,77 @@ import os.path
 import concurrent.futures
 
 
-class Book:
-    """
-    Contains all information regarding the djvu ebook that will be produced.
-    """
+# class Book:
+#     """
+#     Contains all information regarding the djvu ebook that will be produced.
+#     """
 
-    def __init__(self):
-        self.pages = []
-        self.pages_by_path={}
-        self.cover_front = None
-        self.cover_back = None
+#     def __init__(self):
+#         self.pages = []
+#         self.pages_by_path={}
+#         self.cover_front = None
+#         self.cover_back = None
 
-        self.suppliments = {
-            'metadata':None,
-            'bookmarks':None
-        }
-        self.dpi = 0
+#         self.suppliments = {
+#             'metadata':None,
+#             'bookmarks':None
+#         }
+#         self.dpi = 0
 
-    def set_pages(self,file_list):
-        for fpath,ftype,title in file_list:
-            if ftype=="cover_front":
-                self.cover_front=Cover(fpath)
-                continue
-            if ftype=="cover_back":
-                self.cover_back=Cover(fpath)
-                continue
-            if ftype!="page":
-                self.suppliments[ftype]=fpath
-                continue
-            page=Page(fpath)
-            page.title=title
-            if (self.dpi) and (page.dpi != self.dpi):
-                print("msg: [organizer.Book.analyze()] {0}".format(page.path))
-                print("     Page dpi is different from the previous page.", file=sys.stderr)
-                print("     If you encounter problems with minidjvu, this is probably why.", file=sys.stderr)
-            self.dpi = max(self.dpi,page.dpi)
-            self.pages.append(page)
-            self.pages_by_path[page.path]=page
+#     def set_pages(self,file_list):
+#         for fpath,ftype,title in file_list:
+#             if ftype=="cover_front":
+#                 self.cover_front=Cover(fpath)
+#                 continue
+#             if ftype=="cover_back":
+#                 self.cover_back=Cover(fpath)
+#                 continue
+#             if ftype!="page":
+#                 self.suppliments[ftype]=fpath
+#                 continue
+#             page=Page(fpath)
+#             page.title=title
+#             if (self.dpi) and (page.dpi != self.dpi):
+#                 print("msg: [organizer.Book.analyze()] {0}".format(page.path))
+#                 print("     Page dpi is different from the previous page.", file=sys.stderr)
+#                 print("     If you encounter problems with minidjvu, this is probably why.", file=sys.stderr)
+#             self.dpi = max(self.dpi,page.dpi)
+#             self.pages.append(page)
+#             self.pages_by_path[page.path]=page
 
-    def save_report(self):
-        """
-        Saves a diagnostic report of the book in csv format.
-        """
-        with open('book.csv', 'w', encoding='utf8') as handle:
-            handle.write('Path, Bitonal, DPI, Title, OCR\n')
-            for page in self.pages:
-                entry = [page.path, str(page.bitonal), str(page.dpi), str(page.title), str(len(page.text))]
-                entry = ", ".join(entry)
-                handle.write(entry)
-                handle.write('\n')
+#     # def save_report(self):
+#     #     """
+#     #     Saves a diagnostic report of the book in csv format.
+#     #     """
+#     #     with open('book.csv', 'w', encoding='utf8') as handle:
+#     #         handle.write('Path, Bitonal, DPI, Title, OCR\n')
+#     #         for page in self.pages:
+#     #             entry = [page.path, str(page.bitonal), str(page.dpi), str(page.title), str(len(page.text))]
+#     #             entry = ", ".join(entry)
+#     #             handle.write(entry)
+#     #             handle.write('\n')
 
-    def apply_ocr(self,ocr,max_threads):
-        def ocr_on_page(page):
-            return page.apply_ocr(ocr)
+#     # def apply_ocr(self,ocr,max_threads):
+#     #     def ocr_on_page(page):
+#     #         return page.apply_ocr(ocr)
 
-        if max_threads==1:
-            for page in self.pages:
-                ocr_on_page(page)
-            return
+#     #     if max_threads==1:
+#     #         for page in self.pages:
+#     #             ocr_on_page(page)
+#     #         return
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
-            # Start the load operations and mark each future with its URL
-            future_to_page = {executor.submit(ocr_on_page, page): page for page in self.pages}
-            for future in concurrent.futures.as_completed(future_to_page):
-                page = future_to_page[future]
-                try:
-                    data = future.result()
-                except Exception as e:
-                    print('Page %s generated an exception: %s' % (page.title, e))
-                    traceback.print_exc()
-                else:
-                    print('Page %s is %d bytes' % (page.title, len(data)))
+#     #     with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+#     #         # Start the load operations and mark each future with its URL
+#     #         future_to_page = {executor.submit(ocr_on_page, page): page for page in self.pages}
+#     #         for future in concurrent.futures.as_completed(future_to_page):
+#     #             page = future_to_page[future]
+#     #             try:
+#     #                 data = future.result()
+#     #             except Exception as e:
+#     #                 print('Page %s generated an exception: %s' % (page.title, e))
+#     #                 traceback.print_exc()
+#     #             else:
+#     #                 print('Page %s is %d bytes' % (page.title, len(data)))
         
 
 class Cover(object):
@@ -118,6 +118,13 @@ class Page(object):
     """
     Contains information relevant to a single page/image.
     """
+
+    # def _setup_annotations(self):
+    #     if "Background" not in self: self["Background"]="#ffffff"
+    #     if "Zoom" not in self: self["Zoom"]="d100"
+    #     if "Mode" not in self: self["Mode"]="color"
+    #     if "Horizontal Align" not in self: self["Horizontal Align"]="center"
+    #     if "Vertical Align" not in self: self["Vertical Align"]="center"
 
     def __str__(self):
         label=os.path.basename(self.path)

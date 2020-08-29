@@ -1,6 +1,8 @@
 from . import abstracts
 import collections
 import os.path
+import concurrent.futures
+
 
 from . import book as libbook
 from . import ocr as libocr
@@ -120,7 +122,7 @@ class Outline(object):
         S=[]
         for ser in serialized:
             title=ser[0]
-            page=self._project.book.pages_by_path[ser[1]]
+            page=self._project.pages_by_path[ser[1]]
             children=self.deserialize(ser[2])
             S.append(OutlineRow(self._project,title,page,children))
         return S
@@ -294,7 +296,21 @@ class Project(abstracts.SerializedDict):
                 
     def __init__(self,fpath):
         abstracts.SerializedDict.__init__(self,fpath)
-        self.book=None
+        #self.book=None
+
+        # ex book
+        self.pages = []
+        self.pages_by_path={}
+        self.cover_front = None
+        self.cover_back = None
+
+        self.suppliments = {
+            'metadata':None,
+            'bookmarks':None
+        }
+        self.dpi = 0
+        #
+
         if "Metadata" in self:
             if type(self["Metadata"]) in [  collections.OrderedDict, dict ]:
                 self["Metadata"]=list(self["Metadata"].items())
@@ -341,13 +357,6 @@ class Project(abstracts.SerializedDict):
         self._setup_options()
         self._setup_book()
 
-    # def _setup_annotations(self):
-    #     if "Background" not in self: self["Background"]="#ffffff"
-    #     if "Zoom" not in self: self["Zoom"]="d100"
-    #     if "Mode" not in self: self["Mode"]="color"
-    #     if "Horizontal Align" not in self: self["Horizontal Align"]="center"
-    #     if "Vertical Align" not in self: self["Vertical Align"]="center"
-
     def _setup_options(self):
         if "Encoding Options" in self:
             self["Encoding Options"]=self.ProjectSubDict(self,self["Encoding Options"])
@@ -388,15 +397,33 @@ class Project(abstracts.SerializedDict):
             self["Pages"]=self.ProjectSubDict(self)
         if "Tiff directory" not in self: return
         file_list=self._file_list()
-        self.book=libbook.Book()
-        self.book.set_pages(file_list)
+        self.set_pages(file_list)
+
+    def set_pages(self,file_list):
+        for fpath,ftype,title in file_list:
+            if ftype=="cover_front":
+                self.cover_front=libbook.Cover(fpath)
+                continue
+            if ftype=="cover_back":
+                self.cover_back=libbook.Cover(fpath)
+                continue
+            if ftype!="page":
+                self.suppliments[ftype]=fpath
+                continue
+            page=libbook.Page(fpath)
+            page.title=title
+            if (self.dpi) and (page.dpi != self.dpi):
+                print("msg: [organizer.Book.analyze()] {0}".format(page.path))
+                print("     Page dpi is different from the previous page.", file=sys.stderr)
+                print("     If you encounter problems with minidjvu, this is probably why.", file=sys.stderr)
+            self.dpi = max(self.dpi,page.dpi)
+            self.pages.append(page)
+            self.pages_by_path[page.path]=page
+
         
     def _file_list(self):
         f_metadata=os.path.join(self["Tiff directory"],"metadata")
-        #self["Metadata"].write_on(f_metadata)
-
         f_bookmarks=os.path.join(self["Tiff directory"],"bookmarks")
-        #self["Outline"].write_on(f_bookmarks)
 
         file_list=[
             (f_metadata,"metadata",""),
@@ -436,25 +463,46 @@ class Project(abstracts.SerializedDict):
         return file_list
 
     def update_page_numbers(self):
-        for p in self.book.pages:
+        for p in self.pages:
             p.title=self["Pages"][p.path]
 
     def apply_ocr(self):
+        def ocr_on_page(page):
+            return page.apply_ocr(ocr)
+
         max_threads=self["Max threads"]
         ocr=libocr.Tesseract(self["Ocr Options"]['tesseract_options'])
         print('Performing optical character recognition.')
-        self.book.apply_ocr(ocr,max_threads)
-        
+
+        if max_threads==1:
+            for page in self.pages:
+                ocr_on_page(page)
+            return
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+            # Start the load operations and mark each future with its URL
+            future_to_page = {executor.submit(ocr_on_page, page): 
+                              page for page in self.pages}
+            for future in concurrent.futures.as_completed(future_to_page):
+                page = future_to_page[future]
+                try:
+                    data = future.result()
+                except Exception as e:
+                    print('Page %s generated an exception: %s' % (page.title, e))
+                    traceback.print_exc()
+                else:
+                    print('Page %s is %d bytes' % (page.title, len(data)))
+
     def djvubind(self,djvu_name):
-        if len(self.book.pages) == 0: return
+        if len(self.pages) == 0: return
         f_metadata=os.path.join(self["Tiff directory"],"metadata")
         self["Metadata"].write_on(f_metadata)
         f_bookmarks=os.path.join(self["Tiff directory"],"bookmarks")
         self["Outline"].write_on(f_bookmarks)
 
-        print('Binding %d file(s).' % len(self.book.pages))
+        print('Binding %d file(s).' % len(self.pages))
         enc_opts=self["Encoding Options"].copy()
         enc_opts["ocr"]=(self["Ocr Options"]["ocr_engine"] != "no ocr")
         print('Encoding all information to %s.' % djvu_name)
         enc = libencode.Encoder(enc_opts)
-        enc.enc_book(self.book, djvu_name)
+        enc.enc_project(self, djvu_name)

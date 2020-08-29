@@ -99,7 +99,7 @@ class PageNumberingModel(ProjectTableModel):
 
     def _set_page_num(self,path,value):
         self._project["Pages"][path]=value
-        self._project.book.pages_by_path[path].title=value
+        self._project.pages_by_path[path].title=value
 
     def number_from(self,index,start,numtype): 
         keys=list(self._project["Pages"].keys())
@@ -499,6 +499,7 @@ class OcrModel(BaseItemModel):
     def _fix_apostrophes(self,txt):
         txt=txt.replace("’","'")
         txt=txt.replace("|'","l'")
+        txt=txt.replace("I'","l'")
         txt=re.sub(r"'+","'",txt)
         return txt
     

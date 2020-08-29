@@ -184,11 +184,11 @@ class ExternalEncoder(object):
             print(msg, file=sys.stderr)
         self._cleanup()
 
-    def __call__(self,book,outfile): 
+    def __call__(self,project,outfile): 
         tempfile="temp.djvu"
-        for page in book.pages:
+        for page in project.pages:
             if self.bitonal != page.bitonal: continue
-            page_number = book.pages.index(page) + 1
+            page_number = project.pages.index(page) + 1
             print("A",page_number,page.path)
             self.single(page.path, tempfile, page.dpi)
             outfile.insert(tempfile)
@@ -204,20 +204,20 @@ class MinidjvuEncoder(ExternalEncoder):
 
     def single(self, infile, outfile, dpi): pass
 
-    def __call__(self,book,outfile):
+    def __call__(self,project,outfile):
         def chunks(L,n):
             for i in range(0,len(L),n): 
                 yield L[i:i+n]
 
         tempfile="temp.djvu"
         bitonals = []
-        for page in book.pages:
+        for page in project.pages:
             if page.bitonal:
                 bitonals.append(page.path)
         if not bitonals: return
 
         for sublist in chunks(bitonals,100):
-            self._minidjvu(sublist, outfile, book.dpi)
+            self._minidjvu(sublist, outfile, project.dpi)
             self._cleanup()
 
     def _minidjvu(self, infiles, outfile, dpi):
@@ -364,23 +364,23 @@ class Encoder:
         else:
             self._color=self._csepdjvu
 
-    def enc_book(self, book, outfile):
+    def enc_project(self, project, outfile):
         """
         Encode pages, metadata, etc. contained within a organizer.Book() class.
         """
 
         outfile=DjvuFile(outfile)
 
-        self._bitonal(book,outfile)
-        self._color(book,outfile)
+        self._bitonal(project,outfile)
+        self._color(project,outfile)
 
         # Add ocr data
         if self.opts['ocr']:
-            for page in book.pages:
+            for page in project.pages:
                 handle = open('ocr.txt', 'w', encoding="utf8")
                 handle.write(page.text)
                 handle.close()
-                page_number = book.pages.index(page) + 1
+                page_number = project.pages.index(page) + 1
                 outfile.add_text("ocr.txt",page_number)
                 os.remove('ocr.txt')
 
@@ -388,27 +388,27 @@ class Encoder:
 
         # Cover, metadata, bookmarks
 
-        if book.cover_front is not None:
-            self._c44.single(book.cover_front.path, tempfile, book.cover_front.dpi)
+        if project.cover_front is not None:
+            self._c44.single(project.cover_front.path, tempfile, project.cover_front.dpi)
             outfile.add_cover_front(tempfile)
 
-        if book.cover_back is not None:
-            self._c44.single(book.cover_back.path, tempfile, book.cover_back.dpi)
+        if project.cover_back is not None:
+            self._c44.single(project.cover_back.path, tempfile, project.cover_back.dpi)
             outfile.add_cover_back(tempfile)
 
-        if book.suppliments['metadata'] is not None:
-            outfile.add_metadata(book.suppliments['metadata'])
+        if project.suppliments['metadata'] is not None:
+            outfile.add_metadata(project.suppliments['metadata'])
 
-        if book.suppliments['bookmarks'] is not None:
-            outfile.add_bookmarks(book.suppliments['bookmarks'])
+        if project.suppliments['bookmarks'] is not None:
+            outfile.add_bookmarks(project.suppliments['bookmarks'])
 
         # Page numbering
 
         desc=[]
         index = 1
-        if book.cover_front is not None:
+        if project.cover_front is not None:
             index = index + 1
-        for page in book.pages:
+        for page in project.pages:
             if page.title is None:
                 index = index + 1
                 continue

@@ -392,7 +392,7 @@ class OutlineWidget(qtwidgets.QTreeView):
         print("CR1")
         if index is None:
             index=self.selectionModel().currentIndex()
-        dialog=widgets.FormDialog(self.window(),"Create row",self.RowDataForm(self._project.book.pages))
+        dialog=widgets.FormDialog(self.window(),"Create row",self.RowDataForm(self._project.pages))
         title,page,ok=dialog.get_data()
         if not ok: return
         self._model.create_row(index,title,page)
@@ -402,7 +402,7 @@ class OutlineWidget(qtwidgets.QTreeView):
             index=self.selectionModel().currentIndex()
         if not index.isValid(): return
         obj=index.internalPointer()
-        dialog=widgets.FormDialog(self.window(),"Create row",self.RowDataForm(self._project.book.pages,title=obj.title,page=obj.page))
+        dialog=widgets.FormDialog(self.window(),"Create row",self.RowDataForm(self._project.pages,title=obj.title,page=obj.page))
         title,page,ok=dialog.get_data()
         if not ok: return
         self._model.update_row(index,title,page)

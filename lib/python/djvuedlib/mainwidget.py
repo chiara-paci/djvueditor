@@ -923,7 +923,7 @@ class ProjectWidget(qtwidgets.QWidget):
 
     def set_project(self,project): 
         self.tab.clear() # GC non cancella le pagine, le rimuove e basta
-        for page in self._app.project.book.pages:
+        for page in self._app.project.pages:
             widget=PageWidget(self._app,page)
             self.tab.addTab(widget,widget.label)
             widget.labelChanged.connect(self._page_label_changed)
